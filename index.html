@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="format-detection" content="telephone=no">
+<title>懒人记账</title>
+<meta name="description" content="iPhone 快捷指令自动记账 · 手动记账 · 统计，离线可用，数据同步到你的 GitHub 仓库">
+<meta name="theme-color" content="#4f46e5">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/png" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="懒人记账">
+<style>
+  :root{
+    --bg:#eef0f4; --card:#ffffff; --text:#1f2937; --muted:#6b7280;
+    --line:#e5e7eb; --brand:#4f46e5; --brand-bg:#eef2ff;
+    --green:#16a34a; --green-bg:#f0fdf4;
+    --red:#ef4444; --red-bg:#fef2f2;
+    --tabbar-h:60px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    line-height:1.5;
+    padding-bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 18px);
+  }
+  button{font-family:inherit;}
+  input,select,textarea{font-family:inherit;}
+
+  /* ---------- 顶部 ---------- */
+  header{
+    background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 60%,#a855f7 100%);
+    color:#fff; padding:14px 16px 12px; text-align:center;
+  }
+  header h1{margin:0; font-size:19px; letter-spacing:1px;}
+  header .sub{margin-top:2px; font-size:12.5px; opacity:.88; cursor:pointer; user-select:none;}
+  header .sub:active{opacity:.65;}
+
+  /* ---------- 页面 ---------- */
+  .page{display:none; max-width:640px; margin:14px auto 0; padding:0 14px;}
+  .page.active{display:block;}
+
+  .card{
+    background:var(--card); border-radius:16px; padding:16px;
+    box-shadow:0 1px 3px rgba(17,24,39,.08),0 4px 14px rgba(17,24,39,.05);
+    border-top:4px solid var(--brand);
+    margin-bottom:14px;
+  }
+  .card.green{border-top-color:var(--green);}
+  .card.grey{border-top-color:#9ca3af;}
+  .card-head{display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;}
+  .card-title{font-size:17px; font-weight:700;}
+  .card-sub{margin:4px 0 12px; font-size:12.5px; color:var(--muted);}
+  .chip{
+    font-size:12.5px; font-weight:600; padding:3px 10px; border-radius:999px; white-space:nowrap;
+    background:#f3f4f6; color:var(--muted);
+  }
+  .note{margin-top:10px; font-size:12px; color:var(--muted); background:#f9fafb; border-radius:10px; padding:9px 11px;}
+
+  /* ---------- 明细 ---------- */
+  .month-filter{border:1px solid var(--line); border-radius:9px; padding:5px 8px; font-size:13px; background:#f9fafb; color:var(--text);}
+  .day-group{margin-bottom:14px;}
+  .day-head{
+    display:flex; justify-content:space-between; align-items:baseline; gap:8px;
+    padding:4px 2px 7px; font-size:13px; color:var(--muted); border-bottom:1px solid var(--line); margin-bottom:4px;
+  }
+  .day-head b{color:var(--text); font-size:14px;}
+  .day-head .sums{font-size:12px;}
+  .day-head .sums .i{color:var(--green);}
+  .row{
+    display:flex; align-items:center; gap:11px; padding:11px 4px;
+    border-bottom:1px solid #f1f2f6; cursor:pointer;
+  }
+  .row:last-child{border-bottom:none;}
+  .row:active{background:#f9fafb;}
+  .row .emoji{
+    flex:none; width:38px; height:38px; border-radius:11px; background:var(--brand-bg);
+    display:flex; align-items:center; justify-content:center; font-size:19px;
+  }
+  .row .mid{flex:1; min-width:0;}
+  .row .t1{font-size:15px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .row .t2{font-size:12px; color:var(--muted); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .row .amt{flex:none; font-size:15.5px; font-weight:700; text-align:right;}
+  .row .amt.ex{color:var(--red);}
+  .row .amt.in{color:var(--green);}
+  .row .pending-dot{display:inline-block; width:7px; height:7px; border-radius:50%; background:#f59e0b; margin-right:5px; vertical-align:1px;}
+
+  .empty{padding:34px 10px; text-align:center; color:var(--muted); font-size:13.5px;}
+  .empty .big{font-size:38px; margin-bottom:8px;}
+
+  /* ---------- 统计 ---------- */
+  .stat-nav{display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:12px;}
+  .stat-nav .ym{font-size:16px; font-weight:700; min-width:104px; text-align:center;}
+  .nav-btn{
+    width:32px; height:32px; border-radius:10px; border:1px solid var(--line); background:#f9fafb;
+    font-size:15px; color:var(--muted); cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .stat-boxes{display:grid; grid-template-columns:repeat(3,1fr); gap:9px;}
+  .stat-box{border-radius:12px; padding:11px 6px; text-align:center; background:#f9fafb; border:1px solid var(--line);}
+  .stat-box .lb{font-size:12px; color:var(--muted);}
+  .stat-box .v{font-size:16.5px; font-weight:800; margin-top:3px; color:var(--text);}
+  .stat-box.ex{background:var(--red-bg); border-color:#fecaca;}
+  .stat-box.ex .v{color:var(--red);}
+  .stat-box.in{background:var(--green-bg); border-color:#bbf7d0;}
+  .stat-box.in .v{color:var(--green);}
+  .stat-box.bal .v{color:var(--brand);}
+
+  .cat-row{display:flex; align-items:center; gap:9px; padding:7px 0;}
+  .cat-row .ce{flex:none; font-size:17px; width:24px; text-align:center;}
+  .cat-row .cn{flex:none; width:58px; font-size:13.5px; font-weight:600;}
+  .cat-row .bar{flex:1; height:10px; border-radius:999px; background:#f1f2f6; overflow:hidden;}
+  .cat-row .bar i{display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,#6366f1,#a855f7); width:0;}
+  .cat-row .cv{flex:none; width:86px; text-align:right; font-size:12.5px; color:var(--muted);}
+  .cat-row .cv b{color:var(--text); font-size:13px;}
+
+  .trend{display:flex; align-items:flex-end; gap:2px; height:74px; padding-top:6px;}
+  .trend .tb{flex:1; min-width:3px; background:linear-gradient(180deg,#818cf8,#4f46e5); border-radius:3px 3px 0 0; min-height:2px;}
+  .trend-lb{display:flex; justify-content:space-between; font-size:10.5px; color:var(--muted); margin-top:5px;}
+
+  /* ---------- 设置 ---------- */
+  .field{margin-bottom:11px;}
+  .field label{display:block; font-size:12.5px; font-weight:600; color:var(--muted); margin-bottom:5px;}
+  .field input[type=text],.field input[type=password],.field input[type=number]{
+    width:100%; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:15px;
+    background:#fff; color:var(--text);
+  }
+  .field input:focus{outline:none; border-color:var(--brand);}
+  .btn{
+    border:1px solid var(--line); background:#f9fafb; border-radius:10px; padding:9px 14px;
+    font-size:13.5px; font-weight:600; color:var(--text); cursor:pointer;
+  }
+  .btn:active{filter:brightness(.94);}
+  .btn-primary{background:var(--brand); color:#fff; border-color:var(--brand);}
+  .btn-danger{background:var(--red-bg); color:var(--red); border-color:#fecaca;}
+  .btn-green{background:var(--green-bg); color:var(--green); border-color:#bbf7d0;}
+  .btn-row{display:flex; gap:9px; flex-wrap:wrap; margin-top:4px;}
+  .btn-row .btn{flex:1; min-width:118px;}
+
+  .switch-row{display:flex; align-items:center; justify-content:space-between; padding:9px 0; border-bottom:1px solid #f1f2f6;}
+  .switch-row:last-child{border-bottom:none;}
+  .switch-row .sl{font-size:14px; font-weight:600;}
+  .switch-row .sd{font-size:11.5px; color:var(--muted); font-weight:400;}
+  .sw{
+    position:relative; width:46px; height:27px; border-radius:999px; background:#d1d5db; cursor:pointer;
+    transition:background .2s; flex:none; border:none;
+  }
+  .sw::after{
+    content:''; position:absolute; top:2.5px; left:3px; width:22px; height:22px; border-radius:50%;
+    background:#fff; transition:left .2s; box-shadow:0 1px 3px rgba(0,0,0,.25);
+  }
+  .sw.on{background:var(--green);}
+  .sw.on::after{left:21px;}
+
+  details.tut{border:1px solid var(--line); border-radius:12px; background:#fafafa; margin-bottom:9px;}
+  details.tut summary{
+    cursor:pointer; padding:11px 13px; font-size:14px; font-weight:700; list-style:none;
+    display:flex; align-items:center; gap:8px; user-select:none;
+  }
+  details.tut summary::-webkit-details-marker{display:none;}
+  details.tut summary::after{content:'▸'; margin-left:auto; color:var(--muted); transition:transform .15s;}
+  details.tut[open] summary::after{transform:rotate(90deg);}
+  details.tut .tut-body{padding:0 13px 12px; font-size:13px; color:#374151;}
+  details.tut .tut-body ol{margin:6px 0; padding-left:20px;}
+  details.tut .tut-body li{margin-bottom:6px;}
+  details.tut code{
+    background:#eef2ff; color:#3730a3; border-radius:6px; padding:1px 6px; font-size:12px;
+    font-family:ui-monospace,Consolas,monospace; word-break:break-all;
+  }
+  details.tut pre{
+    background:#111827; color:#e5e7eb; border-radius:10px; padding:10px 12px; overflow-x:auto;
+    font-size:11.5px; line-height:1.55; font-family:ui-monospace,Consolas,monospace; margin:8px 0;
+  }
+  .copy-mini{
+    border:1px solid var(--line); background:#fff; border-radius:8px; padding:4px 10px;
+    font-size:12px; font-weight:600; color:var(--brand); cursor:pointer; margin:2px 0;
+  }
+
+  /* ---------- FAB / Tabbar ---------- */
+  #fab{
+    position:fixed; right:18px; z-index:40;
+    bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 16px);
+    width:56px; height:56px; border-radius:50%; border:none; cursor:pointer;
+    background:linear-gradient(135deg,#4f46e5,#a855f7); color:#fff; font-size:28px; line-height:1;
+    box-shadow:0 6px 18px rgba(79,70,229,.45); display:flex; align-items:center; justify-content:center;
+    padding-bottom:4px;
+  }
+  #fab:active{transform:scale(.94);}
+  nav.tabbar{
+    position:fixed; left:0; right:0; bottom:0; z-index:30; height:calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+    padding-bottom:env(safe-area-inset-bottom);
+    background:rgba(255,255,255,.96); backdrop-filter:blur(8px);
+    border-top:1px solid var(--line); display:flex;
+  }
+  nav.tabbar .tab{
+    flex:1; border:none; background:none; cursor:pointer; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:1px; color:var(--muted); font-size:11px; font-weight:600;
+  }
+  nav.tabbar .tab .ti{font-size:21px; line-height:1.2;}
+  nav.tabbar .tab.on{color:var(--brand);}
+
+  /* ---------- 弹层 ---------- */
+  #mask{
+    position:fixed; inset:0; background:rgba(17,24,39,.45); z-index:60; display:none;
+    align-items:flex-end; justify-content:center;
+  }
+  #mask.show{display:flex;}
+  #sheet{
+    background:#fff; width:100%; max-width:540px; max-height:88vh; overflow-y:auto;
+    border-radius:20px 20px 0 0; padding:16px 16px calc(16px + env(safe-area-inset-bottom));
+    animation:up .22s ease;
+  }
+  @keyframes up{from{transform:translateY(40px); opacity:.4;} to{transform:none; opacity:1;}}
+  #sheet h2{margin:0 0 12px; font-size:17px; text-align:center;}
+  .type-toggle{display:grid; grid-template-columns:1fr 1fr; gap:0; border:1px solid var(--line); border-radius:11px; overflow:hidden; margin-bottom:13px;}
+  .type-toggle button{border:none; background:#f9fafb; padding:10px; font-size:14.5px; font-weight:700; color:var(--muted); cursor:pointer;}
+  .type-toggle button.on-ex{background:var(--red-bg); color:var(--red);}
+  .type-toggle button.on-in{background:var(--green-bg); color:var(--green);}
+  .amt-input{position:relative; margin-bottom:13px;}
+  .amt-input .y{position:absolute; left:14px; top:50%; transform:translateY(-50%); font-size:21px; font-weight:800; color:var(--muted);}
+  .amt-input input{
+    width:100%; border:1px solid var(--line); border-radius:12px; padding:13px 12px 13px 38px;
+    font-size:24px; font-weight:800; background:#fff; color:var(--text);
+  }
+  .amt-input input:focus{outline:none; border-color:var(--brand);}
+  .chips{display:grid; grid-template-columns:repeat(auto-fill,minmax(74px,1fr)); gap:8px; margin-bottom:13px;}
+  .cchip{
+    border:1px solid var(--line); background:#fafafa; border-radius:11px; padding:8px 4px; cursor:pointer;
+    text-align:center; font-size:12px; font-weight:600; color:var(--muted);
+  }
+  .cchip .ce{display:block; font-size:19px; margin-bottom:2px;}
+  .cchip.on{background:var(--brand-bg); border-color:var(--brand); color:var(--brand);}
+  .achips{display:flex; flex-wrap:wrap; gap:7px; margin-bottom:13px;}
+  .achip{
+    border:1px solid var(--line); background:#fafafa; border-radius:999px; padding:6px 13px;
+    font-size:12.5px; font-weight:600; color:var(--muted); cursor:pointer;
+  }
+  .achip.on{background:var(--brand-bg); border-color:var(--brand); color:var(--brand);}
+  .sec-lb{font-size:12.5px; font-weight:600; color:var(--muted); margin-bottom:6px;}
+  .note-input{
+    width:100%; border:1px solid var(--line); border-radius:10px; padding:9px 12px; font-size:14px; margin-bottom:12px; background:#fff; color:var(--text);
+  }
+  .note-input:focus{outline:none; border-color:var(--brand);}
+  .sheet-btns{display:flex; gap:9px; margin-top:2px;}
+  .sheet-btns .btn{flex:1; padding:11px;}
+
+  /* ---------- Toast ---------- */
+  #toast{
+    position:fixed; left:50%; bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 20px);
+    transform:translateX(-50%) translateY(10px); z-index:90; opacity:0; pointer-events:none;
+    background:rgba(17,24,39,.92); color:#fff; font-size:13px; padding:10px 18px; border-radius:999px;
+    transition:opacity .2s, transform .2s; max-width:86vw; text-align:center;
+  }
+  #toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  footer{max-width:640px; margin:0 auto; padding:2px 14px 10px; text-align:center; font-size:11px; color:#9ca3af;}
+
+  @media (max-width:960px){
+    .stat-box .v{font-size:15px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>懒人记账 💰</h1>
+  <div class="sub" id="sync-status" title="点击立即同步">…</div>
+</header>
+
+<main>
+  <!-- 明细 -->
+  <section id="page-list" class="page active">
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">账单明细</div>
+        <select id="month-filter" class="month-filter"></select>
+      </div>
+      <div id="list-body"><div class="empty"><div class="big">🧾</div>还没有记录，点右下角 ＋ 记一笔吧</div></div>
+    </div>
+  </section>
+
+  <!-- 统计 -->
+  <section id="page-stats" class="page">
+    <div class="card">
+      <div class="stat-nav">
+        <button class="nav-btn" id="stat-prev">‹</button>
+        <div class="ym" id="stat-ym">—</div>
+        <button class="nav-btn" id="stat-next">›</button>
+      </div>
+      <div class="stat-boxes">
+        <div class="stat-box ex"><div class="lb">支出</div><div class="v" id="st-ex">¥0</div></div>
+        <div class="stat-box in"><div class="lb">收入</div><div class="v" id="st-in">¥0</div></div>
+        <div class="stat-box bal"><div class="lb">结余</div><div class="v" id="st-bal">¥0</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div class="card-title">支出分类</div><span class="chip" id="cat-cnt">0 笔</span></div>
+      <div id="cat-body"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div class="card-title">每日支出</div><span class="chip" id="trend-max">—</span></div>
+      <div class="trend" id="trend"></div>
+      <div class="trend-lb"><span id="trend-l">1</span><span id="trend-r">31</span></div>
+    </div>
+  </section>
+
+  <!-- 设置 -->
+  <section id="page-set" class="page">
+    <div class="card">
+      <div class="card-head"><div class="card-title">GitHub 同步</div><span class="chip" id="sync-chip">未配置</span></div>
+      <div class="card-sub">快捷指令把账单写进你的 GitHub 仓库，本页从仓库读取并展示（飞书方案的平替）。</div>
+      <div class="field"><label>GitHub 用户名</label><input type="text" id="cfg-owner" placeholder="例如 reotho123-pixel"></div>
+      <div class="field"><label>仓库名</label><input type="text" id="cfg-repo" placeholder="lazy-ledger"></div>
+      <div class="field"><label>Token（仅保存在本机浏览器，不上传任何第三方）</label>
+        <input type="password" id="cfg-token" placeholder="ghp_… 或 fine-grained token"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-save-test">保存并测试连接</button>
+        <button class="btn" id="btn-sync">⟳ 立即同步</button>
+      </div>
+      <div class="switch-row" style="margin-top:6px;">
+        <div><div class="sl">自动同步</div><div class="sd">打开页面和每 3 分钟自动拉取/推送</div></div>
+        <button class="sw on" id="sw-auto" aria-label="自动同步开关"></button>
+      </div>
+      <div class="switch-row">
+        <div><div class="sl">同步详情</div><div class="sd" id="sync-detail">尚未同步</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><div class="card-title">📱 快捷指令配置教程</div></div>
+      <div class="card-sub">和 B 站《iPhone懒人记账》飞书方案同款思路：快捷指令解析支付信息 → 写入云端表格；这里把"飞书多维表格"换成"你自己的 GitHub 仓库 + 本应用"。</div>
+
+      <details class="tut" open>
+        <summary>① 准备：创建 GitHub Token</summary>
+        <div class="tut-body">
+          <ol>
+            <li>电脑或手机打开 <code>github.com/settings/personal-access-tokens/new</code></li>
+            <li>名称随意（如 lazy-ledger），过期时间选最长</li>
+            <li><b>仓库访问</b> → 仅选择仓库 → <code>lazy-ledger</code></li>
+            <li><b>权限</b> → Repository permissions → <code>Contents</code> 设为 <code>Read and write</code></li>
+            <li>生成后复制 token（ghp_ 开头的是经典 token，勾选 repo 权限也可以）</li>
+          </ol>
+          <button class="copy-mini" data-copy="https://github.com/settings/personal-access-tokens/new">复制 Token 创建链接</button>
+        </div>
+      </details>
+
+      <details class="tut">
+        <summary>② 配置本应用同步</summary>
+        <div class="tut-body">
+          <ol>
+            <li>在上方填入 用户名 / 仓库名 / Token</li>
+            <li>点「保存并测试连接」，提示成功即可</li>
+            <li>以后每笔记录（手动 + 快捷指令）都会自动双向同步</li>
+          </ol>
+        </div>
+      </details>
+
+      <details class="tut">
+        <summary>③ 手动快速记账快捷指令（推荐先做这个）</summary>
+        <div class="tut-body">
+          <p style="margin:4px 0;">打开 快捷指令 App → ＋ 新建，按顺序添加这些动作：</p>
+          <ol>
+            <li><b>询问输入</b>：提示"金额"，输入类型选<b>数字</b></li>
+            <li><b>从列表中选取</b>：列表填 <code>餐饮,交通,购物,日用,居住,娱乐,医疗,学习,人情,其他</code>，提示"分类"</li>
+            <li><b>格式化日期</b>：当前日期，格式自定义 <code>yyyy-MM-dd HH:mm</code> → 用于"时间"</li>
+            <li><b>格式化日期</b>：当前日期，格式自定义 <code>yyyyMMdd-HHmmss</code> → 用于文件名</li>
+            <li><b>文本</b>：粘贴下面模板，把 <code>金额</code> 换成"询问输入"的变量、<code>分类</code> 换成"选取"的变量、<code>时间</code> 换成第3步变量、<code>文件名</code> 换成第4步变量</li>
+            <li><b>Base64 编码</b>：编码上一步的文本</li>
+            <li><b>获取 URL 内容</b>：
+              <ul>
+                <li>URL：<code>https://api.github.com/repos/你的用户名/lazy-ledger/contents/data/rec-文件名.json</code></li>
+                <li>方法：<b>PUT</b></li>
+                <li>Headers：<code>Authorization</code> = <code>Bearer 你的Token</code>；<code>Accept</code> = <code>application/vnd.github+json</code></li>
+                <li>请求体（JSON）：<code>{"message":"ledger","content":"Base64结果变量"}</code></li>
+              </ul>
+            </li>
+            <li>（可选）<b>显示通知</b>："已记账 ✔"</li>
+          </ol>
+          <button class="copy-mini" id="btn-copy-tpl">复制记录 JSON 模板</button>
+        </div>
+      </details>
+
+      <details class="tut">
+        <summary>④ 自动记账：支付成功自动上传</summary>
+        <div class="tut-body">
+          <ol>
+            <li>把上面第1步改成：<b>接收通知文本</b>（或"匹配文本"）</li>
+            <li>添加 <b>匹配文本</b>：输入=通知文本，正则 <code>¥\s*([0-9]+(?:\.[0-9]+)?)</code>，取第1组作为金额</li>
+            <li>金额取不到时（比如没有 ¥ 符号）：把正则换成 <code>[0-9]+(?:\.[0-9]+)?</code> 再试，或加一个"如果…否则"手动输入兜底</li>
+            <li>自动化入口：快捷指令 → 自动化 → ＋ → <b>App</b> → 选 支付宝/微信 → 勾"通知" → 立即运行、不询问 → 运行上面的快捷指令</li>
+            <li><b>微信提示</b>：部分微信支付通知不带金额，可在"支付成功"页面点 分享 → 运行快捷指令，或轻点背面手动记</li>
+            <li>iOS 17+：也可以把自动化触发设为"轻点 iPhone 背面两下"，秒变手动速记</li>
+          </ol>
+          <button class="copy-mini" data-copy="¥\s*([0-9]+(?:\.[0-9]+)?)">复制金额正则</button>
+        </div>
+      </details>
+
+      <details class="tut">
+        <summary>⑤ 验证 & 常见问题</summary>
+        <div class="tut-body">
+          <ol>
+            <li>运行快捷指令 → 回到本页点「立即同步」→ 明细里出现记录即成功</li>
+            <li>上传失败先检查：token 是否复制全、仓库是否选对、Contents 权限是否为 Read and write</li>
+            <li>快捷指令里如果提示 401 = token 错；404 = 用户名/仓库名错</li>
+            <li>快捷指令记录默认分类"其他"，可在本 App 点开记录随时修改</li>
+          </ol>
+          <button class="copy-mini" id="btn-copy-cfg">复制我的快捷指令配置汇总</button>
+        </div>
+      </details>
+    </div>
+
+    <div class="card green">
+      <div class="card-head"><div class="card-title">数据</div></div>
+      <div class="card-sub">本地数据仅保存在本设备浏览器；配置同步后，云端数据在你的 GitHub 仓库 data/ 目录，完全归你所有。</div>
+      <div class="btn-row">
+        <button class="btn" id="btn-export">导出 JSON</button>
+        <button class="btn" id="btn-import">导入 JSON</button>
+        <button class="btn" id="btn-csv">导出 CSV</button>
+      </div>
+      <input type="file" id="file-import" accept=".json,application/json" style="display:none;">
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="btn btn-danger" id="btn-clear">清空本机数据</button>
+      </div>
+    </div>
+
+    <div class="card grey">
+      <div class="card-head"><div class="card-title">关于</div><span class="chip">v1.0</span></div>
+      <div class="card-sub" style="margin-bottom:0;">
+        懒人记账 · 纯前端离线 PWA · GitHub 仓库即数据库<br>
+        参考 B 站视频《iPhone懒人记账 自动记账 究极不掺水教程来啦》（BV1pg4y1e7oZ）的飞书方案改版
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>数据仅保存在本设备 &amp; 你自己的 GitHub 仓库 · 懒人记账</footer>
+
+<button id="fab" aria-label="记一笔">＋</button>
+
+<nav class="tabbar">
+  <button class="tab on" data-page="list"><span class="ti">🧾</span>明细</button>
+  <button class="tab" data-page="stats"><span class="ti">📊</span>统计</button>
+  <button class="tab" data-page="set"><span class="ti">⚙️</span>设置</button>
+</nav>
+
+<div id="mask">
+  <div id="sheet">
+    <h2 id="sheet-title">记一笔</h2>
+    <div class="type-toggle">
+      <button id="t-ex" class="on-ex">支出 －</button>
+      <button id="t-in">收入 ＋</button>
+    </div>
+    <div class="amt-input">
+      <span class="y">¥</span>
+      <input type="number" id="f-amt" inputmode="decimal" step="0.01" min="0" placeholder="0.00">
+    </div>
+    <div class="sec-lb">分类</div>
+    <div class="chips" id="cat-chips"></div>
+    <div class="sec-lb">支付方式</div>
+    <div class="achips" id="acc-chips"></div>
+    <div class="sec-lb">备注</div>
+    <input class="note-input" id="f-note" placeholder="选填，如：午饭美团">
+    <div class="sec-lb">时间</div>
+    <input class="note-input" id="f-time" type="datetime-local" style="margin-bottom:14px;">
+    <div class="sheet-btns">
+      <button class="btn btn-danger" id="btn-del" style="display:none;">删除</button>
+      <button class="btn" id="btn-cancel">取消</button>
+      <button class="btn btn-primary" id="btn-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+
+/* ============ 常量 ============ */
+var KEY = 'lazy-ledger-v1';
+var CATS = {
+  expense: [['餐饮','🍜'],['交通','🚇'],['购物','🛒'],['日用','🧴'],['居住','🏠'],['娱乐','🎮'],['医疗','💊'],['学习','📚'],['人情','🎁'],['通讯','📱'],['其他','📦']],
+  income:  [['工资','💰'],['兼职','💼'],['理财','📈'],['红包','🧧'],['报销','🧾'],['其他收入','✨']]
+};
+var ACCOUNTS = ['微信支付','支付宝','银行卡','现金','其他'];
+
+/* ============ 状态 ============ */
+var S = {
+  records: {},           // id -> record
+  known: {},             // path -> {sha}  云端已知文件
+  pending: {},           // id -> true     待上传
+  delQ: [],              // [{path,sha}]   待云端删除
+  cfg: { owner:'', repo:'lazy-ledger', token:'', auto:true, branch:'main' },
+  lastSync: 0
+};
+
+function migrate(raw){
+  var o = raw && typeof raw === 'object' ? raw : {};
+  var s = {
+    records: (o.records && typeof o.records === 'object') ? o.records : {},
+    known:   (o.known   && typeof o.known   === 'object') ? o.known   : {},
+    pending: (o.pending && typeof o.pending === 'object') ? o.pending : {},
+    delQ:    Array.isArray(o.delQ) ? o.delQ : [],
+    cfg: {
+      owner: String((o.cfg && o.cfg.owner) || ''),
+      repo:  String((o.cfg && o.cfg.repo)  || 'lazy-ledger'),
+      token: String((o.cfg && o.cfg.token) || ''),
+      auto:  (o.cfg && o.cfg.auto === false) ? false : true,
+      branch: String((o.cfg && o.cfg.branch) || 'main')
+    },
+    lastSync: Number(o.lastSync) || 0
+  };
+  return s;
+}
+function load(){
+  try{
+    var raw = localStorage.getItem(KEY);
+    if(raw) S = migrate(JSON.parse(raw));
+  }catch(e){ /* 脏数据兜底：保留默认 */ }
+}
+function persist(){
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); }
+  catch(e){ toast('本地保存失败：' + e.message); }
+}
+
+/* ============ 工具 ============ */
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function pad(n){ return n < 10 ? '0' + n : '' + n; }
+function ymdStr(ts){
+  var d = new Date(ts);
+  return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+}
+function hmStr(ts){ var d = new Date(ts); return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+function parseTs(s){
+  if(!s) return 0;
+  var t = new Date(String(s).replace(' ', 'T'));
+  if(!isNaN(t.getTime())) return t.getTime();
+  var m = String(s).match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  if(m) return new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5]).getTime();
+  return 0;
+}
+function money(n){
+  n = Number(n) || 0;
+  return '¥' + (Math.round(n * 100) / 100).toFixed(2);
+}
+function weekCn(ts){
+  return '周' + '日一二三四五六'.charAt(new Date(ts).getDay());
+}
+function catEmoji(cat){
+  var all = CATS.expense.concat(CATS.income);
+  for(var i = 0; i < all.length; i++) if(all[i][0] === cat) return all[i][1];
+  return '📦';
+}
+function toast(msg){
+  var t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(function(){ t.classList.remove('show'); }, 2400);
+}
+function copyText(txt, okMsg){
+  function fallback(){
+    var ta = document.createElement('textarea');
+    ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); toast(okMsg || '已复制'); }
+    catch(e){ toast('复制失败，请手动复制'); }
+    document.body.removeChild(ta);
+  }
+  if(navigator.clipboard && navigator.clipboard.writeText && (location.protocol === 'https:' || location.hostname === 'localhost')){
+    navigator.clipboard.writeText(txt).then(function(){ toast(okMsg || '已复制'); }, fallback);
+  } else fallback();
+}
+function newId(){
+  var d = new Date();
+  var t = d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
+  var r = Math.floor(Math.random() * 9000) + 1000;
+  return 'rec-' + t + '-' + r;
+}
+function sanitizeId(id){
+  id = String(id || '').replace(/[^A-Za-z0-9_-]/g, '-');
+  return id || newId();
+}
+function b64(str){
+  return btoa(unescape(encodeURIComponent(str)));
+}
+function normalizeRec(r, idFromPath){
+  var rec = {
+    id: sanitizeId(r.id || idFromPath),
+    type: r.type === 'income' ? 'income' : 'expense',
+    amount: Math.abs(Number(r.amount)) || 0,
+    category: String(r.category || '其他'),
+    note: String(r.note || ''),
+    account: String(r.account || ''),
+    time: String(r.time || ''),
+    src: String(r.src || 'shortcut')
+  };
+  rec.ts = parseTs(rec.time);
+  return rec;
+}
+
+/* ============ 同步引擎 ============ */
+var syncing = false;
+function ghHeaders(extra){
+  var h = {
+    'Accept': 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28'
+  };
+  if(S.cfg.token) h['Authorization'] = 'Bearer ' + S.cfg.token;
+  if(extra) for(var k in extra) h[k] = extra[k];
+  return h;
+}
+function ghApi(path, opt){
+  opt = opt || {};
+  opt.headers = ghHeaders(opt.headers);
+  return fetch('https://api.github.com' + path, opt).then(function(res){
+    return res.text().then(function(txt){
+      var body = null;
+      try{ body = txt ? JSON.parse(txt) : null; }catch(e){}
+      if(!res.ok){
+        var msg = (body && body.message) ? body.message : ('HTTP ' + res.status);
+        var err = new Error(msg); err.status = res.status; throw err;
+      }
+      return body;
+    });
+  });
+}
+function isCfgOk(){ return !!(S.cfg.owner && S.cfg.repo && S.cfg.token); }
+
+function syncStatusText(){
+  if(!navigator.onLine) return '📶 离线中 · 本地可用，联网自动同步';
+  if(!S.cfg.owner) return '⚠️ 未配置同步 · 记录仅存本机';
+  var pend = Object.keys(S.pending).length + S.delQ.length;
+  if(pend > 0) return '⏳ ' + pend + ' 条待同步 · 点击立即同步';
+  if(S.lastSync) return '✅ 已同步 · ' + hmStr(S.lastSync) + ' · 点击立即同步';
+  return '⬇️ 点击立即同步';
+}
+function renderSyncStatus(){
+  $('sync-status').textContent = syncStatusText();
+  var chip = $('sync-chip');
+  var det = $('sync-detail');
+  if(isCfgOk()){
+    chip.textContent = S.lastSync ? '已连接' : '已配置';
+    det.textContent = (S.lastSync ? '上次同步：' + new Date(S.lastSync).toLocaleString('zh-CN') + ' · ' : '')
+      + '仓库：' + S.cfg.owner + '/' + S.cfg.repo + (S.cfg.branch ? '（' + S.cfg.branch + '）' : '')
+      + ' · 待上传 ' + Object.keys(S.pending).length + ' 条';
+  } else {
+    chip.textContent = '未配置';
+    det.textContent = '尚未同步 · 填好上方三项并保存即可开启';
+  }
+}
+
+function pushPending(){
+  var ids = Object.keys(S.pending);
+  var chain = Promise.resolve();
+  ids.forEach(function(id){
+    chain = chain.then(function(){
+      var rec = S.records[id];
+      if(!rec){ delete S.pending[id]; return Promise.resolve(); }
+      var path = 'data/' + id + '.json';
+      var body = { message: 'ledger: ' + (rec.time || ymdStr(Date.now())), content: b64(JSON.stringify(rec)) };
+      if(S.known[path]) body.sha = S.known[path].sha;
+      return ghApi('/repos/' + S.cfg.owner + '/' + S.cfg.repo + '/contents/' + path, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+      }).then(function(r){
+        if(r && r.content && r.content.sha) S.known[path] = { sha: r.content.sha };
+        delete S.pending[id]; persist();
+      }).catch(function(e){
+        // 云端已有该文件但本地没有 sha：取回 sha 后重试一次（导入场景）
+        if(e.status === 422 && !S.known[path]){
+          return ghApi('/repos/' + S.cfg.owner + '/' + S.cfg.repo + '/contents/' + path).then(function(f){
+            if(f && f.sha){
+              body.sha = f.sha;
+              return ghApi('/repos/' + S.cfg.owner + '/' + S.cfg.repo + '/contents/' + path, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+              }).then(function(r2){
+                if(r2 && r2.content && r2.content.sha) S.known[path] = { sha: r2.content.sha };
+                delete S.pending[id]; persist();
+              });
+            }
+          });
+        }
+        throw e;
+      });
+    });
+  });
+  chain = chain.then(function(){
+    var dels = S.delQ.slice();
+    return dels.reduce(function(c, d){
+      return c.then(function(){
+        return ghApi('/repos/' + S.cfg.owner + '/' + S.cfg.repo + '/contents/' + d.path, {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: 'ledger: delete ' + d.path, sha: d.sha })
+        }).then(function(){
+          delete S.known[d.path];
+          S.delQ = S.delQ.filter(function(x){ return x.path !== d.path; });
+          persist();
+        }).catch(function(e){
+          if(e.status === 404){ // 云端已不存在，视为成功
+            delete S.known[d.path];
+            S.delQ = S.delQ.filter(function(x){ return x.path !== d.path; });
+            persist();
+          } // 其他错误：保留在队列，下次再删
+        });
+      });
+    }, Promise.resolve());
+  });
+  return chain;
+}
+
+function pull(){
+  return ghApi('/repos/' + S.cfg.owner + '/' + S.cfg.repo).then(function(repo){
+    var br = (repo && repo.default_branch) || 'main';
+    if(br !== S.cfg.branch){ S.cfg.branch = br; persist(); }
+    return ghApi('/repos/' + S.cfg.owner + '/' + S.cfg.repo + '/git/trees/' + encodeURIComponent(br) + '?recursive=1');
+  }).then(function(tree){
+    var files = ((tree && tree.tree) || []).filter(function(t){
+      return t.type === 'blob' && /^data\/rec-.*\.json$/.test(t.path);
+    });
+    var fresh = files.filter(function(f){ return !S.known[f.path]; });
+    fresh = fresh.slice(0, 300);
+    var o = S.cfg.owner, r = S.cfg.repo, br = S.cfg.branch;
+    return fresh.reduce(function(c, f){
+      return c.then(function(){
+        var m = f.path.match(/^data\/(rec-.*)\.json$/);
+        var idFromPath = m ? m[1] : null;
+        return fetch('https://raw.githubusercontent.com/' + o + '/' + r + '/' + br + '/' + f.path)
+          .then(function(res){ return res.ok ? res.json() : Promise.reject(new Error('raw ' + res.status)); })
+          .then(function(j){
+            var rec = normalizeRec(j, idFromPath);
+            S.records[rec.id] = rec;
+            S.known[f.path] = { sha: f.sha };
+            persist();
+          })
+          .catch(function(){ /* 单个文件坏了不阻塞整体 */ });
+      });
+    }, Promise.resolve());
+  });
+}
+
+function sync(manual){
+  if(syncing) return;
+  if(!S.cfg.owner || !S.cfg.repo){
+    if(manual) toast('请先在设置里填写用户名 / 仓库名');
+    renderSyncStatus(); return;
+  }
+  if(!navigator.onLine){
+    if(manual) toast('当前离线，联网后会自动同步');
+    renderSyncStatus(); return;
+  }
+  syncing = true;
+  $('sync-status').textContent = '⟳ 同步中…';
+  var hadErr = null;
+  var pre = isCfgOk() ? pushPending() : Promise.resolve();
+  pre.then(function(){ return pull(); })
+    .then(function(){
+      S.lastSync = Date.now(); persist();
+    })
+    .catch(function(e){
+      hadErr = e;
+      if(e && e.status === 401) S.lastSync = 0;
+    })
+    .then(function(){
+      syncing = false;
+      renderSyncStatus(); renderAll();
+      if(manual){
+        if(hadErr) toast('同步失败：' + hadErr.message);
+        else toast('同步完成 ✔');
+      }
+      if(hadErr && !manual) $('sync-status').textContent = '⚠️ 同步失败：' + hadErr.message;
+    });
+}
+
+/* ============ 渲染：明细 ============ */
+var listMonth = ''; // '' = 全部
+function monthOptions(){
+  var set = {};
+  for(var id in S.records){
+    var ts = S.records[id].ts;
+    if(ts) set[ymdStr(ts).slice(0,7)] = true;
+  }
+  var arr = Object.keys(set).sort().reverse();
+  return arr;
+}
+function buildMonthFilter(){
+  var sel = $('month-filter');
+  var months = monthOptions();
+  var html = '<option value="all">全部月份</option>';
+  months.forEach(function(m){
+    html += '<option value="' + m + '">' + m.replace('-', '年') + '月</option>';
+  });
+  sel.innerHTML = html;
+  if(listMonth && months.indexOf(listMonth) < 0 && listMonth !== 'all') listMonth = 'all';
+  sel.value = listMonth || 'all';
+}
+function renderList(){
+  buildMonthFilter();
+  var body = $('list-body');
+  var recs = [];
+  for(var id in S.records) recs.push(S.records[id]);
+  recs.sort(function(a, b){ return (b.ts || 0) - (a.ts || 0); });
+  if(listMonth && listMonth !== 'all') recs = recs.filter(function(r){ return (r.ts ? ymdStr(r.ts) : '').slice(0,7) === listMonth; });
+
+  if(!recs.length){
+    body.innerHTML = '<div class="empty"><div class="big">🧾</div>'
+      + (listMonth === 'all' || listMonth === '' ? '还没有记录，点右下角 ＋ 记一笔吧<br><br>或在「设置」里配置快捷指令自动记账'
+                             : '该月暂无记录，切换其他月份看看')
+      + '</div>';
+    return;
+  }
+  var groups = {}, order = [];
+  recs.forEach(function(r){
+    var day = r.ts ? ymdStr(r.ts) : '未知时间';
+    if(!groups[day]){ groups[day] = []; order.push(day); }
+    groups[day].push(r);
+  });
+  var html = '';
+  order.forEach(function(day){
+    var g = groups[day], ex = 0, inc = 0;
+    g.forEach(function(r){ if(r.type === 'income') inc += r.amount; else ex += r.amount; });
+    var dt = parseTs(day);
+    var label = day === '未知时间' ? '未知时间'
+      : (Number(day.slice(5,7)) + '月' + Number(day.slice(8,10)) + '日 ' + weekCn(dt));
+    html += '<div class="day-group"><div class="day-head"><b>' + esc(label) + '</b>'
+      + '<span class="sums">支 ' + esc(money(ex)) + (inc ? ' · <span class="i">收 ' + esc(money(inc)) + '</span>' : '') + '</span></div>';
+    g.forEach(function(r){
+      var isInc = r.type === 'income';
+      html += '<div class="row" data-id="' + esc(r.id) + '">'
+        + '<div class="emoji">' + catEmoji(r.category) + '</div>'
+        + '<div class="mid"><div class="t1">'
+        + (S.pending[r.id] ? '<span class="pending-dot"></span>' : '')
+        + esc(r.category) + (r.note ? ' · ' + esc(r.note) : '') + '</div>'
+        + '<div class="t2">' + esc(r.account || '—') + ' · ' + esc(r.time || '时间未知')
+        + (r.src === 'shortcut' ? ' · ⚡自动' : '') + '</div></div>'
+        + '<div class="amt ' + (isInc ? 'in' : 'ex') + '">' + (isInc ? '+' : '-') + esc(money(r.amount)) + '</div>'
+        + '</div>';
+    });
+    html += '</div>';
+  });
+  body.innerHTML = html;
+  Array.prototype.forEach.call(body.querySelectorAll('.row'), function(el){
+    el.addEventListener('click', function(){ openSheet(el.getAttribute('data-id')); });
+  });
+}
+
+/* ============ 渲染：统计 ============ */
+var statYm = (function(){ var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth()+1); })();
+function renderStats(){
+  $('stat-ym').textContent = statYm.replace('-', '年') + '月';
+  var ex = 0, inc = 0, cnt = 0;
+  var catSum = {};
+  for(var id in S.records){
+    var r = S.records[id];
+    if(!r.ts) continue;
+    if(ymdStr(r.ts).slice(0,7) !== statYm) continue;
+    cnt++;
+    if(r.type === 'income') inc += r.amount;
+    else { ex += r.amount; catSum[r.category] = (catSum[r.category] || 0) + r.amount; }
+  }
+  $('st-ex').textContent = money(ex);
+  $('st-in').textContent = money(inc);
+  $('st-bal').textContent = money(inc - ex);
+  $('cat-cnt').textContent = cnt + ' 笔';
+
+  var arr = [];
+  for(var c in catSum) arr.push([c, catSum[c]]);
+  arr.sort(function(a, b){ return b[1] - a[1]; });
+  var cb = $('cat-body');
+  if(!arr.length){
+    cb.innerHTML = '<div class="empty"><div class="big">🍃</div>本月暂无支出记录</div>';
+  } else {
+    var html = '';
+    arr.forEach(function(it){
+      var pct = ex ? Math.round(it[1] / ex * 100) : 0;
+      html += '<div class="cat-row"><span class="ce">' + catEmoji(it[0]) + '</span>'
+        + '<span class="cn">' + esc(it[0]) + '</span>'
+        + '<span class="bar"><i style="width:' + pct + '%"></i></span>'
+        + '<span class="cv"><b>' + esc(money(it[1])) + '</b> · ' + pct + '%</span></div>';
+    });
+    cb.innerHTML = html;
+  }
+
+  // 每日支出柱状
+  var y = Number(statYm.slice(0,4)), mo = Number(statYm.slice(5,7));
+  var days = new Date(y, mo, 0).getDate();
+  var daily = [], max = 0;
+  for(var i = 0; i < days; i++) daily.push(0);
+  for(var id2 in S.records){
+    var r2 = S.records[id2];
+    if(!r2.ts || r2.type === 'income') continue;
+    if(ymdStr(r2.ts).slice(0,7) !== statYm) continue;
+    var dd = new Date(r2.ts).getDate() - 1;
+    daily[dd] += r2.amount;
+    if(daily[dd] > max) max = daily[dd];
+  }
+  var tb = '';
+  daily.forEach(function(v){
+    var h = max ? Math.max(3, Math.round(v / max * 66)) : 3;
+    tb += '<div class="tb" style="height:' + (v ? h : 2) + 'px; opacity:' + (v ? 1 : .25) + '"></div>';
+  });
+  $('trend').innerHTML = tb;
+  $('trend-max').textContent = max ? '单日最高 ' + money(max) : '—';
+  $('trend-l').textContent = '1';
+  $('trend-r').textContent = days;
+}
+
+/* ============ 记账弹层 ============ */
+var editingId = null, curType = 'expense', curCat = '其他', curAcc = '微信支付';
+function renderChips(){
+  var list = CATS[curType];
+  var seen = {};
+  var html = '';
+  if(curType === 'expense' && curCat && !list.some(function(c){ return c[0] === curCat; })){
+    html += chipHtml(curCat, catEmoji(curCat), true);
+  }
+  if(curType === 'income' && curCat && !list.some(function(c){ return c[0] === curCat; })){
+    html += chipHtml(curCat, catEmoji(curCat), true);
+  }
+  list.forEach(function(c){ html += chipHtml(c[0], c[1], c[0] === curCat); });
+  $('cat-chips').innerHTML = html;
+  Array.prototype.forEach.call($('cat-chips').querySelectorAll('.cchip'), function(el){
+    el.addEventListener('click', function(){
+      curCat = el.getAttribute('data-v'); renderChips();
+    });
+  });
+  var ah = '';
+  ACCOUNTS.forEach(function(a){ ah += chipHtml(a, a === curAcc ? '' : '', false, a); });
+  $('acc-chips').innerHTML = ah;
+  Array.prototype.forEach.call($('acc-chips').querySelectorAll('.cchip'), function(el){
+    el.classList.remove('on');
+    if(el.getAttribute('data-v') === curAcc) el.classList.add('on');
+    el.addEventListener('click', function(){ curAcc = el.getAttribute('data-v'); renderChips(); });
+  });
+}
+function chipHtml(v, emoji, on, labelOverride){
+  return '<button class="cchip' + (on ? ' on' : '') + '" data-v="' + esc(v) + '">'
+    + (emoji ? '<span class="ce">' + emoji + '</span>' : '')
+    + esc(labelOverride || v) + '</button>';
+}
+function setType(t){
+  curType = t;
+  $('t-ex').className = t === 'expense' ? 'on-ex' : '';
+  $('t-in').className = t === 'income' ? 'on-in' : '';
+  var list = CATS[t];
+  var has = list.some(function(c){ return c[0] === curCat; });
+  if(!has) curCat = t === 'expense' ? '其他' : '其他收入';
+  renderChips();
+}
+function openSheet(id){
+  editingId = id || null;
+  var d = new Date();
+  var local = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate())
+    + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  if(id){
+    var r = S.records[id];
+    if(!r) return;
+    $('sheet-title').textContent = '编辑记录';
+    setType(r.type);
+    curCat = r.category || (r.type === 'income' ? '其他收入' : '其他');
+    curAcc = r.account || '微信支付';
+    $('f-amt').value = r.amount;
+    $('f-note').value = r.note || '';
+    $('f-time').value = r.time ? String(r.time).replace(' ', 'T') : local;
+    $('btn-del').style.display = '';
+  } else {
+    $('sheet-title').textContent = '记一笔';
+    setType('expense'); curCat = '其他'; curAcc = '微信支付';
+    $('f-amt').value = ''; $('f-note').value = '';
+    $('f-time').value = local;
+    $('btn-del').style.display = 'none';
+  }
+  renderChips();
+  $('mask').classList.add('show');
+  setTimeout(function(){ $('f-amt').focus(); }, 250);
+}
+function closeSheet(){ $('mask').classList.remove('show'); editingId = null; }
+function saveSheet(){
+  var amt = Math.abs(Number($('f-amt').value));
+  if(!amt){ toast('请输入金额'); return; }
+  var tv = $('f-time').value || '';
+  var timeStr = tv ? tv.replace('T', ' ') : (ymdStr(Date.now()) + ' ' + hmStr(Date.now()));
+  var rec = {
+    type: curType, amount: amt, category: curCat,
+    note: String($('f-note').value || '').trim(),
+    account: curAcc, time: timeStr,
+    src: 'web'
+  };
+  if(editingId){
+    rec.id = editingId;
+    rec.src = S.records[editingId] && S.records[editingId].src === 'shortcut' ? 'shortcut' : 'web';
+    rec.ts = parseTs(rec.time);
+    S.records[editingId] = rec;
+    S.pending[editingId] = true;   // 已有云文件的用 known sha 覆盖更新
+    toast('已更新 ✔');
+  } else {
+    rec.id = newId();
+    rec.ts = parseTs(rec.time);
+    S.records[rec.id] = rec;
+    S.pending[rec.id] = true;
+    toast('已记账 ✔');
+  }
+  persist(); closeSheet(); renderAll();
+  if(isCfgOk() && navigator.onLine) sync(false);
+}
+function delRecord(){
+  if(!editingId) return;
+  var id = editingId;
+  if(!confirm('确定删除这笔记录吗？' + (S.known['data/' + id + '.json'] ? '（云端记录也会一并删除）' : ''))) return;
+  var path = 'data/' + id + '.json';
+  if(S.known[path]) S.delQ.push({ path: path, sha: S.known[path].sha });
+  delete S.records[id]; delete S.pending[id];
+  persist(); closeSheet(); renderAll();
+  toast('已删除');
+  if(isCfgOk() && navigator.onLine) sync(false);
+}
+
+/* ============ 设置 / 数据 ============ */
+function fillCfgForm(){
+  $('cfg-owner').value = S.cfg.owner || '';
+  $('cfg-repo').value = S.cfg.repo || 'lazy-ledger';
+  $('cfg-token').value = S.cfg.token || '';
+  $('sw-auto').className = S.cfg.auto ? 'sw on' : 'sw';
+}
+function saveAndTest(){
+  var owner = String($('cfg-owner').value || '').trim();
+  var repo  = String($('cfg-repo').value || '').trim();
+  var token = String($('cfg-token').value || '').trim();
+  if(!owner || !repo){ toast('请填写用户名和仓库名'); return; }
+  S.cfg.owner = owner; S.cfg.repo = repo; S.cfg.token = token;
+  persist(); renderSyncStatus();
+  if(!token){ toast('已保存（未填 token：只能读公开仓库，不能上传）'); renderAll(); return; }
+  toast('正在测试连接…');
+  ghApi('/repos/' + owner + '/' + repo).then(function(repoInfo){
+    S.cfg.branch = (repoInfo && repoInfo.default_branch) || 'main';
+    S.lastSync = 0; persist();
+    toast('连接成功 ✔ 仓库分支 ' + S.cfg.branch);
+    renderSyncStatus(); renderAll();
+    sync(false);
+  }).catch(function(e){
+    var hint = e.status === 404 ? '仓库不存在（先检查用户名/仓库名，或先完成部署）'
+      : e.status === 401 ? 'Token 无效（401）'
+      : e.message;
+    toast('连接失败：' + hint);
+  });
+}
+function exportJson(){
+  var out = { app: 'lazy-ledger', version: 1, exported_at: new Date().toISOString(), records: [] };
+  for(var id in S.records) out.records.push(S.records[id]);
+  var blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'lazy-ledger-' + ymdStr(Date.now()) + '.json';
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 3000);
+}
+function exportCsv(){
+  var rows = [['时间','类型','金额','分类','备注','支付方式','来源']];
+  var recs = [];
+  for(var id in S.records) recs.push(S.records[id]);
+  recs.sort(function(a, b){ return (a.ts || 0) - (b.ts || 0); });
+  recs.forEach(function(r){
+    rows.push([r.time || '', r.type === 'income' ? '收入' : '支出',
+      r.amount, r.category, r.note, r.account, r.src === 'shortcut' ? '快捷指令' : '手动']);
+  });
+  var csv = '\uFEFF' + rows.map(function(row){
+    return row.map(function(v){ return '"' + String(v).replace(/"/g, '""') + '"'; }).join(',');
+  }).join('\r\n');
+  var blob = new Blob([csv], { type: 'text/csv' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'lazy-ledger-' + ymdStr(Date.now()) + '.csv';
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 3000);
+}
+function importJson(file){
+  var fr = new FileReader();
+  fr.onload = function(){
+    try{
+      var j = JSON.parse(fr.result);
+      var list = Array.isArray(j) ? j : (Array.isArray(j.records) ? j.records : null);
+      if(!list) throw new Error('文件里没有 records 数组');
+      var n = 0;
+      list.forEach(function(raw){
+        var rec = normalizeRec(raw, null);
+        if(!rec.amount) return;
+        S.records[rec.id] = rec;
+        if(!S.known['data/' + rec.id + '.json']) S.pending[rec.id] = true;
+        n++;
+      });
+      persist(); renderAll();
+      toast('导入 ' + n + ' 条 ✔');
+      if(isCfgOk() && navigator.onLine) sync(false);
+    }catch(e){ toast('导入失败：' + e.message); }
+  };
+  fr.readAsText(file);
+}
+
+/* ============ 页面切换 ============ */
+function showPage(name){
+  Array.prototype.forEach.call(document.querySelectorAll('.page'), function(p){ p.classList.remove('active'); });
+  $('page-' + name).classList.add('active');
+  Array.prototype.forEach.call(document.querySelectorAll('.tabbar .tab'), function(t){
+    t.classList.toggle('on', t.getAttribute('data-page') === name);
+  });
+  window.scrollTo(0, 0);
+}
+function renderAll(){ renderList(); renderStats(); renderSyncStatus(); }
+
+/* ============ 事件绑定 ============ */
+function bind(){
+  Array.prototype.forEach.call(document.querySelectorAll('.tabbar .tab'), function(t){
+    t.addEventListener('click', function(){ showPage(t.getAttribute('data-page')); });
+  });
+  $('fab').addEventListener('click', function(){ openSheet(null); });
+  $('btn-cancel').addEventListener('click', closeSheet);
+  $('mask').addEventListener('click', function(e){ if(e.target === $('mask')) closeSheet(); });
+  $('btn-save').addEventListener('click', saveSheet);
+  $('btn-del').addEventListener('click', delRecord);
+  $('t-ex').addEventListener('click', function(){ setType('expense'); });
+  $('t-in').addEventListener('click', function(){ setType('income'); });
+  $('month-filter').addEventListener('change', function(){ listMonth = this.value; renderList(); });
+  $('stat-prev').addEventListener('click', function(){
+    var y = Number(statYm.slice(0,4)), m = Number(statYm.slice(5,7)) - 1;
+    if(m < 1){ m = 12; y--; }
+    statYm = y + '-' + pad(m); renderStats();
+  });
+  $('stat-next').addEventListener('click', function(){
+    var y = Number(statYm.slice(0,4)), m = Number(statYm.slice(5,7)) + 1;
+    if(m > 12){ m = 1; y++; }
+    statYm = y + '-' + pad(m); renderStats();
+  });
+  $('sync-status').addEventListener('click', function(){ sync(true); });
+  $('btn-sync').addEventListener('click', function(){ sync(true); });
+  $('btn-save-test').addEventListener('click', saveAndTest);
+  $('sw-auto').addEventListener('click', function(){
+    S.cfg.auto = !S.cfg.auto;
+    this.className = S.cfg.auto ? 'sw on' : 'sw';
+    persist();
+  });
+  $('btn-export').addEventListener('click', exportJson);
+  $('btn-csv').addEventListener('click', exportCsv);
+  $('btn-import').addEventListener('click', function(){ $('file-import').click(); });
+  $('file-import').addEventListener('change', function(){
+    if(this.files && this.files[0]) importJson(this.files[0]);
+    this.value = '';
+  });
+  $('btn-clear').addEventListener('click', function(){
+    if(!confirm('确定清空本机所有记录和配置吗？（云端仓库数据不受影响，可重新同步拉回）')) return;
+    localStorage.removeItem(KEY);
+    S = migrate(null);
+    persist();
+    fillCfgForm(); renderAll();
+    toast('已清空');
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.copy-mini[data-copy]'), function(b){
+    b.addEventListener('click', function(){ copyText(b.getAttribute('data-copy'), '已复制'); });
+  });
+  $('btn-copy-tpl').addEventListener('click', function(){
+    copyText('{"id":"rec-文件名","type":"expense","amount":金额,"category":"分类","note":"备注可留空","account":"支付宝","time":"时间","src":"shortcut"}',
+      'JSON 模板已复制');
+  });
+  $('btn-copy-cfg').addEventListener('click', function(){
+    if(!S.cfg.owner){ toast('请先在上方保存同步配置'); return; }
+    var txt = '【懒人记账 · 快捷指令配置】\n'
+      + '仓库：' + S.cfg.owner + '/' + S.cfg.repo + '\n'
+      + 'Token：（你自己的 token，不要发给任何人）\n\n'
+      + '上传接口（PUT）：\n'
+      + 'https://api.github.com/repos/' + S.cfg.owner + '/' + S.cfg.repo + '/contents/data/rec-文件名.json\n\n'
+      + 'Headers：\n'
+      + 'Authorization: Bearer 你的Token\n'
+      + 'Accept: application/vnd.github+json\n\n'
+      + '请求体（JSON）：\n'
+      + '{"message":"ledger","content":"<Base64编码后的记录JSON>"}\n\n'
+      + '记录 JSON 模板：\n'
+      + '{"id":"rec-文件名","type":"expense","amount":金额,"category":"分类","note":"备注","account":"支付宝","time":"时间","src":"shortcut"}';
+    copyText(txt, '配置汇总已复制');
+  });
+  window.addEventListener('online', function(){ renderSyncStatus(); sync(false); });
+  window.addEventListener('offline', renderSyncStatus);
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden && S.cfg.auto) sync(false);
+  });
+}
+
+/* ============ 启动 ============ */
+load();
+bind();
+fillCfgForm();
+renderAll();
+setInterval(function(){
+  if(S.cfg.auto && isCfgOk() && navigator.onLine && !document.hidden) sync(false);
+}, 180000);
+setTimeout(function(){ if(S.cfg.auto && isCfgOk()) sync(false); }, 900);
+
+/* SW 注册（file:// 下跳过，核心功能不受影响） */
+if('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')){
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('./sw.js').catch(function(){});
+  });
+}
+})();
+</script>
+</body>
+</html>
