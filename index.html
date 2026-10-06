@@ -123,6 +123,29 @@
   .trend .tb{flex:1; min-width:3px; background:linear-gradient(180deg,#818cf8,#4f46e5); border-radius:3px 3px 0 0; min-height:2px;}
   .trend-lb{display:flex; justify-content:space-between; font-size:10.5px; color:var(--muted); margin-top:5px;}
 
+  /* ---------- 饼图 + 每月收支 ---------- */
+  .pie-svg{width:176px; height:176px; display:block; margin:0 auto;}
+  .pie-num{font-size:12px; font-weight:800; fill:#1f2937;}
+  .pie-lb{font-size:7.5px; fill:#6b7280;}
+  .legend-row{display:flex; align-items:center; gap:8px; padding:7px 2px; border-bottom:1px solid #f1f2f6; font-size:13px;}
+  .legend-row:last-child{border-bottom:none;}
+  .legend-dot{width:10px; height:10px; border-radius:3px; flex:none;}
+  .le-emoji{flex:none; font-size:15px;}
+  .le-name{flex:1; font-weight:600;}
+  .le-pct{flex:none; color:var(--muted); font-size:12px; width:38px; text-align:right;}
+  .le-amt{flex:none; width:86px; text-align:right; font-size:13px;}
+  .mbars{display:flex; align-items:flex-end; gap:4px; height:112px;}
+  .mcol{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; cursor:pointer; border-radius:8px; padding:2px 0;}
+  .mcol:active{background:#f3f4f6;}
+  .mcol.on{background:var(--brand-bg);}
+  .mval{font-size:9.5px; color:var(--muted); margin-bottom:3px; white-space:nowrap; max-width:100%; overflow:hidden;}
+  .mbar{display:flex; align-items:flex-end; gap:2px; height:72px;}
+  .mbar i{display:block; width:10px; border-radius:3px 3px 0 0; background:#e5e7eb;}
+  .mbar i.ex{background:linear-gradient(180deg,#818cf8,#4f46e5);}
+  .mbar i.in{background:linear-gradient(180deg,#4ade80,#16a34a);}
+  .mlb{font-size:10.5px; color:var(--muted); margin-top:4px;}
+  .mcol.on .mlb{color:var(--brand); font-weight:700;}
+
   /* ---------- 设置 ---------- */
   .field{margin-bottom:11px;}
   .field label{display:block; font-size:12.5px; font-weight:600; color:var(--muted); margin-bottom:5px;}
@@ -299,8 +322,15 @@
       </div>
     </div>
     <div class="card">
-      <div class="card-head"><div class="card-title">支出分类</div><span class="chip" id="cat-cnt">0 笔</span></div>
-      <div id="cat-body"></div>
+      <div class="card-head"><div class="card-title">分类占比</div><span class="chip" id="cat-cnt">0 笔</span></div>
+      <div id="pie-body"></div>
+      <div id="cat-legend"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div class="card-title">每月收支</div><span class="chip">近 6 个月</span></div>
+      <div class="card-sub">点一列柱子可以跳到那个月</div>
+      <div class="mbars" id="mbars"></div>
+      <div class="legend-row" style="border:none;padding-top:8px;"><span class="legend-dot" style="background:#4f46e5"></span><span>支出</span><span class="legend-dot" style="background:#16a34a;margin-left:12px"></span><span>收入</span></div>
     </div>
     <div class="card">
       <div class="card-head"><div class="card-title">每日支出</div><span class="chip" id="trend-max">—</span></div>
@@ -521,6 +551,10 @@ function load(){
   try{
     var raw = localStorage.getItem(KEY);
     if(raw) S = migrate(JSON.parse(raw));
+    for(var id in S.records){
+      var r = S.records[id];
+      if(!r.ts){ r.ts = parseTs(r.time); }
+    }
   }catch(e){ /* 脏数据兜底：保留默认 */ }
 }
 function persist(){
@@ -875,20 +909,8 @@ function renderStats(){
   var arr = [];
   for(var c in catSum) arr.push([c, catSum[c]]);
   arr.sort(function(a, b){ return b[1] - a[1]; });
-  var cb = $('cat-body');
-  if(!arr.length){
-    cb.innerHTML = '<div class="empty"><div class="big">🍃</div>本月暂无支出记录</div>';
-  } else {
-    var html = '';
-    arr.forEach(function(it){
-      var pct = ex ? Math.round(it[1] / ex * 100) : 0;
-      html += '<div class="cat-row"><span class="ce">' + catEmoji(it[0]) + '</span>'
-        + '<span class="cn">' + esc(it[0]) + '</span>'
-        + '<span class="bar"><i style="width:' + pct + '%"></i></span>'
-        + '<span class="cv"><b>' + esc(money(it[1])) + '</b> · ' + pct + '%</span></div>';
-    });
-    cb.innerHTML = html;
-  }
+  renderPie(arr, ex, cnt);
+  renderMonthly();
 
   // 每日支出柱状
   var y = Number(statYm.slice(0,4)), mo = Number(statYm.slice(5,7));
@@ -912,6 +934,74 @@ function renderStats(){
   $('trend-max').textContent = max ? '单日最高 ' + money(max) : '—';
   $('trend-l').textContent = '1';
   $('trend-r').textContent = days;
+}
+
+/* ============ 渲染：饼图 + 每月收支 ============ */
+var PALETTE = ['#ef4444','#f97316','#f59e0b','#22c55e','#14b8a6','#06b6d4','#3b82f6','#8b5cf6','#ec4899','#a855f7','#64748b'];
+function renderPie(arr, ex, cnt){
+  var body = $('pie-body'), lg = $('cat-legend');
+  $('cat-cnt').textContent = cnt + ' 笔';
+  if(!arr.length){
+    body.innerHTML = '<div class="empty"><div class="big">🥧</div>本月暂无支出记录</div>';
+    lg.innerHTML = '';
+    return;
+  }
+  var r = 39, C = 2 * Math.PI * r, offset = 0, segs = '';
+  arr.forEach(function(it, i){
+    var len = (it[1] / ex) * C;
+    segs += '<circle cx="60" cy="60" r="39" fill="none" stroke="' + PALETTE[i % PALETTE.length]
+      + '" stroke-width="17" stroke-dasharray="' + len.toFixed(2) + ' ' + (C - len).toFixed(2)
+      + '" stroke-dashoffset="' + (-offset).toFixed(2) + '" transform="rotate(-90 60 60)"></circle>';
+    offset += len;
+  });
+  body.innerHTML = '<svg class="pie-svg" viewBox="0 0 120 120">' + segs
+    + '<text x="60" y="57" text-anchor="middle" class="pie-num">' + esc(money(ex)) + '</text>'
+    + '<text x="60" y="72" text-anchor="middle" class="pie-lb">总支出</text></svg>';
+  var html = '';
+  arr.forEach(function(it, i){
+    var pct = ex ? Math.round(it[1] / ex * 100) : 0;
+    html += '<div class="legend-row"><span class="legend-dot" style="background:' + PALETTE[i % PALETTE.length] + '"></span>'
+      + '<span class="le-emoji">' + catEmoji(it[0]) + '</span><span class="le-name">' + esc(it[0]) + '</span>'
+      + '<span class="le-pct">' + pct + '%</span><span class="le-amt"><b>' + esc(money(it[1])) + '</b></span></div>';
+  });
+  lg.innerHTML = html;
+}
+function monthSum(ym){
+  var ex = 0, inc = 0;
+  for(var id in S.records){
+    var r = S.records[id];
+    if(!r.ts) continue;
+    if(ymdStr(r.ts).slice(0, 7) !== ym) continue;
+    if(r.type === 'income') inc += r.amount; else ex += r.amount;
+  }
+  return { ex: ex, inc: inc };
+}
+function renderMonthly(){
+  var list = [], y = Number(statYm.slice(0, 4)), m = Number(statYm.slice(5, 7));
+  for(var i = 0; i < 6; i++){ list.unshift(y + '-' + pad(m)); m--; if(m < 1){ m = 12; y--; } }
+  var max = 0, sums = {};
+  list.forEach(function(ym){
+    var s = monthSum(ym); sums[ym] = s;
+    max = Math.max(max, s.ex, s.inc);
+  });
+  var html = '';
+  list.forEach(function(ym){
+    var s = sums[ym];
+    var hex = Math.max(4, Math.round(s.ex / max * 66));
+    var hin = Math.max(4, Math.round(s.inc / max * 66));
+    html += '<div class="mcol' + (ym === statYm ? ' on' : '') + '" data-ym="' + ym + '">'
+      + '<div class="mval">' + (s.ex ? esc(money(s.ex)) : '&nbsp;') + '</div>'
+      + '<div class="mbar"><i class="in" style="height:' + hin + 'px"></i><i class="ex" style="height:' + hex + 'px"></i></div>'
+      + '<div class="mlb">' + Number(ym.slice(5, 7)) + '月</div></div>';
+  });
+  var mb = $('mbars');
+  mb.innerHTML = html;
+  Array.prototype.forEach.call(mb.querySelectorAll('.mcol'), function(el){
+    el.addEventListener('click', function(){
+      statYm = el.getAttribute('data-ym');
+      renderStats();
+    });
+  });
 }
 
 /* ============ 记账弹层 ============ */
