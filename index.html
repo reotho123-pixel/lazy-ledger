@@ -542,7 +542,7 @@ function parseTs(s){
   if(!s) return 0;
   var t = new Date(String(s).replace(' ', 'T'));
   if(!isNaN(t.getTime())) return t.getTime();
-  var m = String(s).match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  var m = String(s).match(/(\d{4})-(\d{2})-(\d{2})[ T_.](\d{2})[-.:](\d{2})/);
   if(m) return new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5]).getTime();
   return 0;
 }
@@ -603,6 +603,9 @@ function normalizeRec(r, idFromPath){
     src: String(r.src || 'shortcut')
   };
   rec.ts = parseTs(rec.time);
+  if(rec.ts && String(r.time || '').indexOf('_') >= 0){
+    rec.time = ymdStr(rec.ts) + ' ' + hmStr(rec.ts);
+  }
   return rec;
 }
 
