@@ -362,92 +362,39 @@
     </div>
 
     <div class="card">
-      <div class="card-head"><div class="card-title">📱 快捷指令配置教程</div></div>
-      <div class="card-sub">和 B 站《iPhone懒人记账》飞书方案同款思路：快捷指令解析支付信息 → 写入云端表格；这里把"飞书多维表格"换成"你自己的 GitHub 仓库 + 本应用"。</div>
-
-      <details class="tut" open>
-        <summary>① 准备：创建 GitHub Token</summary>
-        <div class="tut-body">
-          <ol>
-            <li>电脑或手机打开 <code>github.com/settings/personal-access-tokens/new</code></li>
-            <li>名称随意（如 lazy-ledger），过期时间选最长</li>
-            <li><b>仓库访问</b> → 仅选择仓库 → <code>lazy-ledger</code></li>
-            <li><b>权限</b> → Repository permissions → <code>Contents</code> 设为 <code>Read and write</code></li>
-            <li>生成后复制 token（ghp_ 开头的是经典 token，勾选 repo 权限也可以）</li>
-          </ol>
-          <button class="copy-mini" data-copy="https://github.com/settings/personal-access-tokens/new">复制 Token 创建链接</button>
-        </div>
-      </details>
+      <div class="card-head"><div class="card-title">📱 快捷指令速查</div></div>
+      <div class="card-sub">已搭好的「记一笔」参数速查；完整搭建教程见仓库 README（github.com/reotho123-pixel/lazy-ledger）。</div>
 
       <details class="tut">
-        <summary>② 配置本应用同步</summary>
+        <summary>上传接口 / 金额正则 / 记录 JSON</summary>
         <div class="tut-body">
-          <ol>
-            <li>在上方填入 用户名 / 仓库名 / Token</li>
-            <li>点「保存并测试连接」，提示成功即可</li>
-            <li>以后每笔记录（手动 + 快捷指令）都会自动双向同步</li>
-          </ol>
-        </div>
-      </details>
-
-      <details class="tut">
-        <summary>③ 建快捷指令「记一笔」（截屏识别版）</summary>
-        <div class="tut-body">
-          <p style="margin:4px 0;">新建快捷指令，依次添加（全部用英文键盘打符号）：</p>
-          <ol>
-            <li><b>截屏</b></li>
-            <li><b>从图像提取文本</b>（不用设置）</li>
-            <li><b>匹配文本</b>：文本=提取的文本；正则 <code>[-¥]\s*[0-9,]+\.[0-9]{1,2}|\d+(\.[0-9]+)?元</code></li>
-            <li><b>从列表中选取</b>：列表=匹配；提示"请选择金额"</li>
-            <li><b>替换文本</b>：输入=所选项目；查找 <code>[^0-9.]</code>（开正则）；替换为留空</li>
-            <li><b>格式化日期</b>：当前日期，自定义 <code>yyyy-MM-dd_HH-mm</code>（下划线，没有空格冒号）</li>
-            <li><b>文本</b>：拼记录 JSON（模板见下一步）</li>
-            <li><b>Base64 编码</b>（不用设置）</li>
-            <li><b>替换文本</b>：输入=Base64编码结果；查找 <code>[^A-Za-z0-9+/=]</code>（开正则）；替换为留空 ← 去掉换行，必须要有</li>
-            <li><b>获取 URL 内容</b>：方法 PUT（详细见下一步）</li>
-          </ol>
-        </div>
-      </details>
-
-      <details class="tut">
-        <summary>④ 微信/支付宝自动识别 + 上传</summary>
-        <div class="tut-body">
-          <ol>
-            <li><b>如果</b>：提取的文本 包含 <code>微信</code></li>
-            <li>"如果"里放一个<b>文本</b>：记录 JSON（account 写 微信支付）</li>
-            <li><b>否则</b>里放一个<b>文本</b>：同样 JSON（account 写 支付宝）</li>
-            <li><b>结束如果</b>；之后 Base64 的输入选「如果的结果」</li>
-          </ol>
-          <p style="margin:4px 0;">获取URL内容（点展开箭头 ▼）：</p>
-          <ul style="margin:4px 0; padding-left:18px;">
-            <li>URL：<code>https://api.github.com/repos/你的用户名/lazy-ledger/contents/data/rec-格式化后的日期.json</code></li>
-            <li>方法：<b>PUT</b></li>
-            <li>头部：<code>Authorization</code> = <code>Bearer 你的Token</code>；<code>Accept</code> = <code>application/vnd.github+json</code></li>
-            <li>请求体（JSON）：<code>message</code>=ledger；<code>content</code>=去掉换行后的结果</li>
-          </ul>
-          <p style="margin:4px 0;">记录 JSON 模板（黑字照打，[彩色] 用点框插变量；<b>引号逗号全是英文半角，不要打多余空格</b>）：</p>
+          <p style="margin:4px 0;">上传（PUT，头部带 Bearer token）：</p>
+          <pre>https://api.github.com/repos/你的用户名/lazy-ledger/contents/data/rec-日期.json</pre>
+          <p style="margin:4px 0;">金额正则：</p>
+          <pre>[-¥]\s*[0-9,]+\.[0-9]{1,2}|\d+(\.[0-9]+)?元</pre>
+          <p style="margin:4px 0;">记录 JSON：</p>
           <pre>{"id":"rec-[格式化后的日期]","type":"expense","amount":[更新后的文本],"category":"其他","note":"","account":"支付宝","time":"[格式化后的日期]","src":"shortcut"}</pre>
-          <p style="margin:4px 0;">⚠️ 常见坑：冒号逗号打成中文全角（如 amount 后面的 （））、符号后多打空格，都会让数据变脏或上传失败。检查方法：在 App 统计页看分类占比是否正常。</p>
+          <p style="margin:4px 0;">⚠️ 422 = Base64 带了换行（检查去换行的替换文本）；分类默认「其他」，明细里点开可改。</p>
+          <button class="copy-mini" data-copy="[-¥]\s*[0-9,]+\.[0-9]{1,2}|\d+(\.[0-9]+)?元">复制金额正则</button>
+          <button class="copy-mini" data-copy="https://github.com/reotho123-pixel/lazy-ledger/blob/main/README.md">复制完整教程链接</button>
         </div>
       </details>
 
       <details class="tut">
-        <summary>⑤ 日常使用</summary>
+        <summary>日常使用 / 报错对照</summary>
         <div class="tut-body">
           <ol>
-            <li>设置 → 辅助功能 → 触控 → <b>轻点背面 → 轻点两下</b> → 选「记一笔」</li>
-            <li>付完款停在支付成功页 → 敲背面两下 → 点选金额 → 记账完成</li>
-            <li>分类默认「其他」，在 App 明细里点开记录随时修改</li>
-            <li>微信/支付宝自动识别；第一次运行弹权限全点允许</li>
-            <li>上传失败：401=token 错；404=仓库/权限错；422=JSON 或 Base64 不合法（多半是全角符号/换行）</li>
+            <li>付完款停在支付成功页 → <b>轻点背面两下</b>（设置→辅助功能→触控→轻点背面绑定）→ 点选金额</li>
+            <li>分类默认「其他」，明细里点开记录随时改</li>
+            <li>401=token 错；404=仓库/权限错；422=Base64 或 JSON 不合法</li>
           </ol>
         </div>
       </details>
     </div>
 
     <div class="card green">
-      <div class="card-head"><div class="card-title">数据</div></div>
-      <div class="card-sub">本地数据仅保存在本设备浏览器；配置同步后，云端数据在你的 GitHub 仓库 data/ 目录，完全归你所有。</div>
+      <div class="card-head"><div class="card-title">数据</div><span class="chip">v1.2</span></div>
+      <div class="card-sub">数据在本机浏览器 + 你的 GitHub 仓库，完全归你所有。懒人记账 · 纯前端离线 PWA。</div>
       <div class="btn-row">
         <button class="btn" id="btn-export">导出 JSON</button>
         <button class="btn" id="btn-import">导入 JSON</button>
@@ -456,14 +403,6 @@
       <input type="file" id="file-import" accept=".json,application/json" style="display:none;">
       <div class="btn-row" style="margin-top:10px;">
         <button class="btn btn-danger" id="btn-clear">清空本机数据</button>
-      </div>
-    </div>
-
-    <div class="card grey">
-      <div class="card-head"><div class="card-title">关于</div><span class="chip">v1.0</span></div>
-      <div class="card-sub" style="margin-bottom:0;">
-        懒人记账 · 纯前端离线 PWA · GitHub 仓库即数据库<br>
-        参考 B 站视频《iPhone懒人记账 自动记账 究极不掺水教程来啦》（BV1pg4y1e7oZ）的飞书方案改版
       </div>
     </div>
   </section>
