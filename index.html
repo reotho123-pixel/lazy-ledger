@@ -391,55 +391,56 @@
       </details>
 
       <details class="tut">
-        <summary>③ 手动快速记账快捷指令（推荐先做这个）</summary>
+        <summary>③ 建快捷指令「记一笔」（截屏识别版）</summary>
         <div class="tut-body">
-          <p style="margin:4px 0;">打开 快捷指令 App → ＋ 新建，按顺序添加这些动作：</p>
+          <p style="margin:4px 0;">新建快捷指令，依次添加（全部用英文键盘打符号）：</p>
           <ol>
-            <li><b>询问输入</b>：提示"金额"，输入类型选<b>数字</b></li>
-            <li><b>从列表中选取</b>：列表填 <code>餐饮,交通,购物,日用,居住,娱乐,医疗,学习,人情,其他</code>，提示"分类"</li>
-            <li><b>格式化日期</b>：当前日期，格式自定义 <code>yyyy-MM-dd HH:mm</code> → 用于"时间"</li>
-            <li><b>格式化日期</b>：当前日期，格式自定义 <code>yyyyMMdd-HHmmss</code> → 用于文件名</li>
-            <li><b>文本</b>：粘贴下面模板，把 <code>金额</code> 换成"询问输入"的变量、<code>分类</code> 换成"选取"的变量、<code>时间</code> 换成第3步变量、<code>文件名</code> 换成第4步变量</li>
-            <li><b>Base64 编码</b>：编码上一步的文本</li>
-            <li><b>获取 URL 内容</b>：
-              <ul>
-                <li>URL：<code>https://api.github.com/repos/你的用户名/lazy-ledger/contents/data/rec-文件名.json</code></li>
-                <li>方法：<b>PUT</b></li>
-                <li>Headers：<code>Authorization</code> = <code>Bearer 你的Token</code>；<code>Accept</code> = <code>application/vnd.github+json</code></li>
-                <li>请求体（JSON）：<code>{"message":"ledger","content":"Base64结果变量"}</code></li>
-              </ul>
-            </li>
-            <li>（可选）<b>显示通知</b>："已记账 ✔"</li>
+            <li><b>截屏</b></li>
+            <li><b>从图像提取文本</b>（不用设置）</li>
+            <li><b>匹配文本</b>：文本=提取的文本；正则 <code>[-¥]\s*[0-9,]+\.[0-9]{1,2}|\d+(\.[0-9]+)?元</code></li>
+            <li><b>从列表中选取</b>：列表=匹配；提示"请选择金额"</li>
+            <li><b>替换文本</b>：输入=所选项目；查找 <code>[^0-9.]</code>（开正则）；替换为留空</li>
+            <li><b>格式化日期</b>：当前日期，自定义 <code>yyyy-MM-dd_HH-mm</code>（下划线，没有空格冒号）</li>
+            <li><b>文本</b>：拼记录 JSON（模板见下一步）</li>
+            <li><b>Base64 编码</b>（不用设置）</li>
+            <li><b>替换文本</b>：输入=Base64编码结果；查找 <code>[^A-Za-z0-9+/=]</code>（开正则）；替换为留空 ← 去掉换行，必须要有</li>
+            <li><b>获取 URL 内容</b>：方法 PUT（详细见下一步）</li>
           </ol>
-          <button class="copy-mini" id="btn-copy-tpl">复制记录 JSON 模板</button>
         </div>
       </details>
 
       <details class="tut">
-        <summary>④ 自动记账：支付成功自动上传</summary>
+        <summary>④ 微信/支付宝自动识别 + 上传</summary>
         <div class="tut-body">
           <ol>
-            <li>把上面第1步改成：<b>接收通知文本</b>（或"匹配文本"）</li>
-            <li>添加 <b>匹配文本</b>：输入=通知文本，正则 <code>¥\s*([0-9]+(?:\.[0-9]+)?)</code>，取第1组作为金额</li>
-            <li>金额取不到时（比如没有 ¥ 符号）：把正则换成 <code>[0-9]+(?:\.[0-9]+)?</code> 再试，或加一个"如果…否则"手动输入兜底</li>
-            <li>自动化入口：快捷指令 → 自动化 → ＋ → <b>App</b> → 选 支付宝/微信 → 勾"通知" → 立即运行、不询问 → 运行上面的快捷指令</li>
-            <li><b>微信提示</b>：部分微信支付通知不带金额，可在"支付成功"页面点 分享 → 运行快捷指令，或轻点背面手动记</li>
-            <li>iOS 17+：也可以把自动化触发设为"轻点 iPhone 背面两下"，秒变手动速记</li>
+            <li><b>如果</b>：提取的文本 包含 <code>微信</code></li>
+            <li>"如果"里放一个<b>文本</b>：记录 JSON（account 写 微信支付）</li>
+            <li><b>否则</b>里放一个<b>文本</b>：同样 JSON（account 写 支付宝）</li>
+            <li><b>结束如果</b>；之后 Base64 的输入选「如果的结果」</li>
           </ol>
-          <button class="copy-mini" data-copy="¥\s*([0-9]+(?:\.[0-9]+)?)">复制金额正则</button>
+          <p style="margin:4px 0;">获取URL内容（点展开箭头 ▼）：</p>
+          <ul style="margin:4px 0; padding-left:18px;">
+            <li>URL：<code>https://api.github.com/repos/你的用户名/lazy-ledger/contents/data/rec-格式化后的日期.json</code></li>
+            <li>方法：<b>PUT</b></li>
+            <li>头部：<code>Authorization</code> = <code>Bearer 你的Token</code>；<code>Accept</code> = <code>application/vnd.github+json</code></li>
+            <li>请求体（JSON）：<code>message</code>=ledger；<code>content</code>=去掉换行后的结果</li>
+          </ul>
+          <p style="margin:4px 0;">记录 JSON 模板（黑字照打，[彩色] 用点框插变量；<b>引号逗号全是英文半角，不要打多余空格</b>）：</p>
+          <pre>{"id":"rec-[格式化后的日期]","type":"expense","amount":[更新后的文本],"category":"其他","note":"","account":"支付宝","time":"[格式化后的日期]","src":"shortcut"}</pre>
+          <p style="margin:4px 0;">⚠️ 常见坑：冒号逗号打成中文全角（如 amount 后面的 （））、符号后多打空格，都会让数据变脏或上传失败。检查方法：在 App 统计页看分类占比是否正常。</p>
         </div>
       </details>
 
       <details class="tut">
-        <summary>⑤ 验证 & 常见问题</summary>
+        <summary>⑤ 日常使用</summary>
         <div class="tut-body">
           <ol>
-            <li>运行快捷指令 → 回到本页点「立即同步」→ 明细里出现记录即成功</li>
-            <li>上传失败先检查：token 是否复制全、仓库是否选对、Contents 权限是否为 Read and write</li>
-            <li>快捷指令里如果提示 401 = token 错；404 = 用户名/仓库名错</li>
-            <li>快捷指令记录默认分类"其他"，可在本 App 点开记录随时修改</li>
+            <li>设置 → 辅助功能 → 触控 → <b>轻点背面 → 轻点两下</b> → 选「记一笔」</li>
+            <li>付完款停在支付成功页 → 敲背面两下 → 点选金额 → 记账完成</li>
+            <li>分类默认「其他」，在 App 明细里点开记录随时修改</li>
+            <li>微信/支付宝自动识别；第一次运行弹权限全点允许</li>
+            <li>上传失败：401=token 错；404=仓库/权限错；422=JSON 或 Base64 不合法（多半是全角符号/换行）</li>
           </ol>
-          <button class="copy-mini" id="btn-copy-cfg">复制我的快捷指令配置汇总</button>
         </div>
       </details>
     </div>
@@ -1254,26 +1255,6 @@ function bind(){
   });
   Array.prototype.forEach.call(document.querySelectorAll('.copy-mini[data-copy]'), function(b){
     b.addEventListener('click', function(){ copyText(b.getAttribute('data-copy'), '已复制'); });
-  });
-  $('btn-copy-tpl').addEventListener('click', function(){
-    copyText('{"id":"rec-文件名","type":"expense","amount":金额,"category":"分类","note":"备注可留空","account":"支付宝","time":"时间","src":"shortcut"}',
-      'JSON 模板已复制');
-  });
-  $('btn-copy-cfg').addEventListener('click', function(){
-    if(!S.cfg.owner){ toast('请先在上方保存同步配置'); return; }
-    var txt = '【懒人记账 · 快捷指令配置】\n'
-      + '仓库：' + S.cfg.owner + '/' + S.cfg.repo + '\n'
-      + 'Token：（你自己的 token，不要发给任何人）\n\n'
-      + '上传接口（PUT）：\n'
-      + 'https://api.github.com/repos/' + S.cfg.owner + '/' + S.cfg.repo + '/contents/data/rec-文件名.json\n\n'
-      + 'Headers：\n'
-      + 'Authorization: Bearer 你的Token\n'
-      + 'Accept: application/vnd.github+json\n\n'
-      + '请求体（JSON）：\n'
-      + '{"message":"ledger","content":"<Base64编码后的记录JSON>"}\n\n'
-      + '记录 JSON 模板：\n'
-      + '{"id":"rec-文件名","type":"expense","amount":金额,"category":"分类","note":"备注","account":"支付宝","time":"时间","src":"shortcut"}';
-    copyText(txt, '配置汇总已复制');
   });
   window.addEventListener('online', function(){ renderSyncStatus(); sync(false); });
   window.addEventListener('offline', renderSyncStatus);
