@@ -572,7 +572,7 @@
     <div class="card">
       <div class="card-head"><div class="card-title">GitHub 同步</div><span class="chip" id="sync-chip">未配置</span></div>
       <div class="card-sub">快捷指令把账单写进你的 GitHub 仓库，本页从仓库读取并展示（飞书方案的平替）。</div>
-      <div class="field"><label>GitHub 用户名</label><input type="text" id="cfg-owner" placeholder="例如 reotho123-pixel"></div>
+      <div class="field"><label>GitHub 用户名</label><input type="text" id="cfg-owner" placeholder="你自己的 GitHub 用户名"></div>
       <div class="field"><label>仓库名</label><input type="text" id="cfg-repo" placeholder="lazy-ledger"></div>
       <div class="field"><label>Token（仅保存在本机浏览器，不上传任何第三方）</label>
         <input type="password" id="cfg-token" placeholder="ghp_… 或 fine-grained token"></div>
@@ -590,8 +590,34 @@
     </div>
 
     <div class="card">
+      <div class="card-head"><div class="card-title">🎁 分享给朋友</div></div>
+      <div class="card-sub">把这个网页发给朋友，他们打开就是<b>全新的空白账本</b>，看不到你的任何记录。</div>
+      <div class="note" style="margin-bottom:12px;">
+        数据存在两个地方：<b>朋友自己的手机浏览器</b> + <b>朋友自己的 GitHub 仓库</b>。
+        跟你的完全隔离，互相看不到。
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-share">复制网址</button>
+      </div>
+      <details class="tut" style="margin-top:12px;">
+        <summary>朋友要做什么才能自动记账？</summary>
+        <div class="tut-body">
+          <ol>
+            <li>打开这个网址 → 添加到主屏幕（Safari 分享 → 添加到主屏幕），之后就能离线用</li>
+            <li>自己建一个 GitHub 仓库（例如也叫 <code>lazy-ledger</code>）</li>
+            <li>自己生成一个 token（只授权那一个仓库的 Contents 读写权限）</li>
+            <li>在 App「设置」里填：<b>自己的用户名 / 仓库名 / token</b> → 保存并测试连接</li>
+            <li>照着「📱 快捷指令速查」搭一遍快捷指令（把里面的用户名换成自己的）</li>
+          </ol>
+          <p style="margin:4px 0;">⚠️ <b>千万不要把你的 token 给别人</b> —— 那等于把仓库钥匙给出去。每个人用自己的。</p>
+          <button class="copy-mini" data-copy="https://github.com/reotho123-pixel/lazy-ledger/blob/main/README.md">复制完整搭建教程</button>
+        </div>
+      </details>
+    </div>
+
+    <div class="card">
       <div class="card-head"><div class="card-title">📱 快捷指令速查</div></div>
-      <div class="card-sub">已搭好的「记一笔」参数速查；完整搭建教程见仓库 README（github.com/reotho123-pixel/lazy-ledger）。</div>
+      <div class="card-sub">已搭好的「记一笔」参数速查；完整搭建教程见仓库 README。</div>
 
       <details class="tut">
         <summary>上传接口 / 金额正则 / 记录 JSON</summary>
@@ -622,7 +648,7 @@
     </div>
 
     <div class="card green">
-      <div class="card-head"><div class="card-title">数据</div><span class="chip">v2.3</span></div>
+      <div class="card-head"><div class="card-title">数据</div><span class="chip">v2.4</span></div>
       <div class="card-sub">数据在本机浏览器 + 你的 GitHub 仓库，完全归你所有。懒人记账 · 纯前端离线 PWA。</div>
       <div class="note">云端若有分类写坏的旧记录（日期串/整段列表），同步时会自动修正并推回仓库，无需手动处理。</div>
       <div class="btn-row">
@@ -1723,6 +1749,16 @@ function bind(){
     persist();
   });
   $('btn-recat').addEventListener('click', reCategorize);
+  $('btn-share').addEventListener('click', function(){
+    var url = location.origin + location.pathname;
+    // 有系统分享面板就用它（手机上能直接发微信/QQ），否则退回复制
+    if(navigator.share){
+      navigator.share({ title: '懒人记账', text: 'iPhone 自动记账，数据存自己的 GitHub，离线可用', url: url })
+        .catch(function(){ /* 用户取消，不提示 */ });
+    } else {
+      copyText(url, '网址已复制，发给朋友即可');
+    }
+  });
   $('btn-export').addEventListener('click', exportJson);
   $('btn-csv').addEventListener('click', exportCsv);
   $('btn-import').addEventListener('click', function(){ $('file-import').click(); });
