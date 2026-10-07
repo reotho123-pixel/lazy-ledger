@@ -16,7 +16,7 @@
 <meta name="apple-mobile-web-app-title" content="懒人记账">
 <style>
   :root{
-    --bg:#e9eef8; --card:#ffffff; --text:#1f2937; --muted:#5f6b7c;
+    --bg:#f3f6fd; --card:#ffffff; --text:#1f2937; --muted:#5f6b7c;
     --line:#e5e7eb; --brand:#4f46e5; --brand-bg:#eef2ff;
     --green:#16a34a; --green-bg:#f0fdf4;
     --red:#ef4444; --red-bg:#fef2f2;
@@ -37,14 +37,14 @@
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
     line-height:1.5;
     padding-bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 30px);
-    /* 彩色底：玻璃层要靠它才能透出质感（越透越依赖这层） */
-    background:#e9eef8;
+    /* 蓝紫冷调，浅一些 */
+    background:#f3f6fd;
     background-image:
-      radial-gradient(at 0% 0%,    rgba(120,165,255,.52) 0px, transparent 58%),
-      radial-gradient(at 100% 2%,  rgba(186,140,255,.44) 0px, transparent 52%),
-      radial-gradient(at 100% 62%, rgba(104,222,214,.40) 0px, transparent 52%),
-      radial-gradient(at 0% 100%,  rgba(255,166,198,.36) 0px, transparent 55%),
-      radial-gradient(at 52% 44%,  rgba(150,190,255,.26) 0px, transparent 60%);
+      radial-gradient(at 6% 0%,    rgba(158,186,255,.34) 0px, transparent 56%),
+      radial-gradient(at 96% 4%,   rgba(196,166,255,.30) 0px, transparent 52%),
+      radial-gradient(at 100% 52%, rgba(146,176,255,.24) 0px, transparent 56%),
+      radial-gradient(at 0% 94%,   rgba(178,196,255,.28) 0px, transparent 56%),
+      radial-gradient(at 52% 100%, rgba(206,186,255,.22) 0px, transparent 58%);
     background-attachment:fixed;
     background-repeat:no-repeat;
   }
@@ -159,6 +159,42 @@
 
   .empty{padding:34px 10px; text-align:center; color:var(--muted); font-size:13.5px;}
   .empty .big{font-size:38px; margin-bottom:8px;}
+
+  /* ---------- iOS 式滑块指示器 ---------- */
+  /* 一个绝对定位的色块，靠 transform 平滑滑到选中项下面，而不是瞬间跳 */
+  .glider{
+    position:absolute; top:0; left:0; z-index:0; pointer-events:none;
+    opacity:0;
+    transition:
+      transform .40s cubic-bezier(.34,1.28,.52,1),
+      width    .34s cubic-bezier(.4,.9,.3,1),
+      height   .34s cubic-bezier(.4,.9,.3,1),
+      background-color .28s ease,
+      opacity  .16s linear;
+    will-change:transform, width, height;
+  }
+  .glider.show{opacity:1;}
+  /* 任务栏：玻璃胶囊 */
+  nav.tabbar .glider{
+    border-radius:var(--r-md);
+    background:rgba(255,255,255,.62);
+    box-shadow:0 4px 16px rgba(31,38,135,.10), inset 0 1px 0 rgba(255,255,255,.95);
+  }
+  /* 支出/收入分段：白胶囊，带红/绿淡色 */
+  .type-toggle .glider{
+    border-radius:var(--r-sm);
+    background:rgba(255,255,255,.95);
+    box-shadow:0 2px 8px rgba(31,38,135,.10);
+  }
+  .type-toggle .glider.exp{background:rgba(255,248,248,.97);}
+  .type-toggle .glider.inc{background:rgba(246,255,249,.97);}
+  /* 分类 / 支付方式：渐变紫胶囊 */
+  .chips .glider, .achips .glider{
+    border-radius:var(--r-md);
+    background:linear-gradient(135deg,rgba(99,102,241,.92),rgba(79,70,229,.92));
+    box-shadow:0 5px 16px rgba(79,70,229,.34), inset 0 1px 0 rgba(255,255,255,.4);
+  }
+  .achips .glider{border-radius:var(--r-pill);}
 
   /* ---------- 统计 ---------- */
   .stat-nav{display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;}
@@ -348,27 +384,22 @@
     overflow:hidden;
   }
   nav.tabbar::before{
-    content:''; position:absolute; inset:0 0 auto 0; height:55%;
+    content:''; position:absolute; inset:0 0 auto 0; height:55%; z-index:0;
     background:linear-gradient(180deg, rgba(255,255,255,.5), rgba(255,255,255,0));
     pointer-events:none;
   }
   nav.tabbar .tab{
-    position:relative; flex:1; height:100%;
+    position:relative; z-index:1; flex:1; height:100%;
     border:none; background:none; cursor:pointer;
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
     color:var(--muted); font-size:11px; font-weight:700;
     border-radius:var(--r-md);
-    transition:color .2s, background .22s, box-shadow .22s;
+    transition:color .22s;
   }
-  nav.tabbar .tab .ti{font-size:21px; line-height:1.15; transition:transform .22s;}
-  /* 选中：透明玻璃按钮 */
-  nav.tabbar .tab.on{
-    color:var(--brand);
-    background:rgba(255,255,255,.62);
-    box-shadow:0 4px 16px rgba(31,38,135,.10), inset 0 1px 0 rgba(255,255,255,.95);
-  }
-  nav.tabbar .tab.on .ti{transform:scale(1.12);}
-  nav.tabbar .tab:active{background:rgba(255,255,255,.45);}
+  nav.tabbar .tab .ti{font-size:21px; line-height:1.15; transition:transform .26s cubic-bezier(.34,1.4,.5,1);}
+  /* 选中：底色由 .glider 负责，这里只管文字颜色和图标缩放 */
+  nav.tabbar .tab.on{color:var(--brand);}
+  nav.tabbar .tab.on .ti{transform:scale(1.14);}
 
   /* ---------- 弹层 ---------- */
   #mask{
@@ -391,23 +422,20 @@
   @keyframes up{from{transform:translateY(50px); opacity:.3;} to{transform:none; opacity:1;}}
   #sheet h2{margin:0 0 14px; font-size:17px; font-weight:800; text-align:center;}
   .type-toggle{
+    position:relative;
     display:grid; grid-template-columns:1fr 1fr; gap:4px;
-    border-radius:var(--r-sm); overflow:hidden; margin-bottom:14px; padding:4px;
+    border-radius:var(--r-md); overflow:hidden; margin-bottom:14px; padding:4px;
     background:rgba(31,38,135,.07);
   }
   .type-toggle button{
-    border:none; background:transparent; padding:10px; border-radius:11px;
+    position:relative; z-index:1;
+    border:none; background:transparent; padding:10px; border-radius:var(--r-sm);
     font-size:14.5px; font-weight:700; color:var(--muted); cursor:pointer;
-    transition:background .18s, color .18s, box-shadow .18s;
+    transition:color .22s;
   }
-  .type-toggle button.on-ex{
-    background:rgba(255,255,255,.95); color:var(--red);
-    box-shadow:0 2px 8px rgba(31,38,135,.10);
-  }
-  .type-toggle button.on-in{
-    background:rgba(255,255,255,.95); color:var(--green);
-    box-shadow:0 2px 8px rgba(31,38,135,.10);
-  }
+  /* 选中态底色由 .glider 提供 */
+  .type-toggle button.on-ex{color:var(--red);}
+  .type-toggle button.on-in{color:var(--green);}
   .amt-input{position:relative; margin-bottom:14px;}
   .amt-input .y{position:absolute; left:15px; top:50%; transform:translateY(-50%); font-size:21px; font-weight:800; color:var(--muted);}
   .amt-input input{
@@ -418,37 +446,32 @@
     box-shadow:inset 0 1px 0 rgba(255,255,255,.9);
   }
   .amt-input input:focus{outline:none; border-color:rgba(79,70,229,.5); box-shadow:0 0 0 4px rgba(79,70,229,.14);}
-  .chips{display:grid; grid-template-columns:repeat(auto-fill,minmax(74px,1fr)); gap:9px; margin-bottom:14px;}
+  .chips{position:relative; display:grid; grid-template-columns:repeat(auto-fill,minmax(74px,1fr)); gap:9px; margin-bottom:14px;}
   .cchip{
+    position:relative; z-index:1;
     border:1px solid rgba(255,255,255,.8); border-radius:var(--r-md); padding:10px 4px; cursor:pointer;
     text-align:center; font-size:12px; font-weight:700; color:var(--muted);
     background:rgba(255,255,255,.45);
     -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
     box-shadow:inset 0 1px 0 rgba(255,255,255,.85);
-    transition:transform .14s, background .18s, border-color .18s, color .18s;
+    transition:transform .16s, color .22s, border-color .22s;
   }
   .cchip:active{transform:scale(.95);}
   .cchip .ce{display:block; font-size:19px; margin-bottom:2px;}
-  .cchip.on{
-    background:linear-gradient(135deg,rgba(99,102,241,.92),rgba(79,70,229,.92));
-    border-color:rgba(255,255,255,.45); color:#fff;
-    box-shadow:0 5px 16px rgba(79,70,229,.34), inset 0 1px 0 rgba(255,255,255,.4);
-  }
-  .achips{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px;}
+  /* 选中：底色由 .glider 提供 */
+  .cchip.on{color:#fff; border-color:rgba(255,255,255,.45);}
+  .achips{position:relative; display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px;}
   .achip{
+    position:relative; z-index:1;
     border:1px solid rgba(255,255,255,.8); border-radius:var(--r-pill); padding:8px 15px;
     font-size:12.5px; font-weight:700; color:var(--muted); cursor:pointer;
     background:rgba(255,255,255,.45);
     -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
     box-shadow:inset 0 1px 0 rgba(255,255,255,.85);
-    transition:transform .14s, background .18s;
+    transition:transform .16s, color .22s, border-color .22s;
   }
   .achip:active{transform:scale(.95);}
-  .achip.on{
-    background:linear-gradient(135deg,rgba(99,102,241,.92),rgba(79,70,229,.92));
-    border-color:rgba(255,255,255,.45); color:#fff;
-    box-shadow:0 5px 16px rgba(79,70,229,.32), inset 0 1px 0 rgba(255,255,255,.4);
-  }
+  .achip.on{color:#fff; border-color:rgba(255,255,255,.45);}
   .sec-lb{font-size:12.5px; font-weight:700; color:var(--muted); margin-bottom:7px;}
   .note-input{
     width:100%; border:1px solid rgba(255,255,255,.85); border-radius:var(--r-md); padding:12px 14px; font-size:14px; margin-bottom:13px;
@@ -598,7 +621,7 @@
     </div>
 
     <div class="card green">
-      <div class="card-head"><div class="card-title">数据</div><span class="chip">v2.1</span></div>
+      <div class="card-head"><div class="card-title">数据</div><span class="chip">v2.2</span></div>
       <div class="card-sub">数据在本机浏览器 + 你的 GitHub 仓库，完全归你所有。懒人记账 · 纯前端离线 PWA。</div>
       <div class="note">云端若有分类写坏的旧记录（日期串/整段列表），同步时会自动修正并推回仓库，无需手动处理。</div>
       <div class="btn-row">
@@ -1376,31 +1399,95 @@ function renderMonthly(){
 
 /* ============ 记账弹层 ============ */
 var editingId = null, curType = 'expense', curCat = '其他', curAcc = '微信支付';
+
+/* ---------- iOS 式滑块：把 .glider 平滑移到选中项下面 ---------- */
+function getGlider(container){
+  var g = container.querySelector('.glider');
+  if(!g){
+    g = document.createElement('span');
+    g.className = 'glider';
+    container.insertBefore(g, container.firstChild);
+  }
+  return g;
+}
+function moveGlider(container, activeEl, extraClass){
+  if(!container || !activeEl) return;
+  var g = getGlider(container);
+  var first = !g.classList.contains('show');
+  g.className = 'glider' + (extraClass ? ' ' + extraClass : '');
+  if(first) g.style.transition = 'none';        // 首次直接落位，不要从 (0,0) 滑过来
+  g.style.width = activeEl.offsetWidth + 'px';
+  g.style.height = activeEl.offsetHeight + 'px';
+  g.style.transform = 'translate3d(' + activeEl.offsetLeft + 'px,' + activeEl.offsetTop + 'px,0)';
+  g.classList.add('show');
+  if(first){ void g.offsetWidth; g.style.transition = ''; }
+}
+/* 让滑块跟到容器里当前选中的项；没有选中项就隐藏 */
+function syncGlider(container, sel, extraClass){
+  if(!container) return;
+  var el = container.querySelector(sel);
+  if(!el){
+    var g = container.querySelector('.glider');
+    if(g) g.classList.remove('show');
+    return;
+  }
+  moveGlider(container, el, extraClass);
+}
+
 function renderChips(){
-  var list = CATS[curType];
-  var seen = {};
-  var html = '';
-  if(curType === 'expense' && curCat && !list.some(function(c){ return c[0] === curCat; })){
-    html += chipHtml(curCat, catEmoji(curCat), true);
-  }
-  if(curType === 'income' && curCat && !list.some(function(c){ return c[0] === curCat; })){
-    html += chipHtml(curCat, catEmoji(curCat), true);
-  }
-  list.forEach(function(c){ html += chipHtml(c[0], c[1], c[0] === curCat); });
-  $('cat-chips').innerHTML = html;
-  Array.prototype.forEach.call($('cat-chips').querySelectorAll('.cchip'), function(el){
-    el.addEventListener('click', function(){
-      curCat = el.getAttribute('data-v'); renderChips();
+  // 只在分类列表本身变化时重建 DOM；点击切换只更新 class，滑块才能平滑滑动
+  var sig = curType + '|' + (CATS[curType].map(function(c){ return c[0]; }).join(','))
+    + '|' + (CATS[curType].some(function(c){ return c[0] === curCat; }) ? 'in' : 'out:' + curCat);
+  var catBox = $('cat-chips');
+  if(catBox.getAttribute('data-sig') !== sig){
+    catBox.setAttribute('data-sig', sig);
+    var list = CATS[curType];
+    var html = '';
+    if(curCat && !list.some(function(c){ return c[0] === curCat; })){
+      html += chipHtml(curCat, catEmoji(curCat), false);
+    }
+    list.forEach(function(c){ html += chipHtml(c[0], c[1], false); });
+    catBox.innerHTML = html;
+    Array.prototype.forEach.call(catBox.querySelectorAll('.cchip'), function(el){
+      el.addEventListener('click', function(){
+        curCat = el.getAttribute('data-v');
+        updateChipSel();
+      });
     });
+  }
+  var accBox = $('acc-chips');
+  if(!accBox.getAttribute('data-built')){
+    accBox.setAttribute('data-built', '1');
+    var ah = '';
+    ACCOUNTS.forEach(function(a){ ah += chipHtml(a, a === curAcc ? '' : '', false, a); });
+    accBox.innerHTML = ah;
+    Array.prototype.forEach.call(accBox.querySelectorAll('.cchip'), function(el){
+      el.addEventListener('click', function(){
+        curAcc = el.getAttribute('data-v');
+        updateChipSel();
+      });
+    });
+  }
+  updateChipSel();
+}
+/* 只切换选中态 + 移动滑块，不重建 DOM */
+function updateChipSel(){
+  var catBox = $('cat-chips'), accBox = $('acc-chips');
+  Array.prototype.forEach.call(catBox.querySelectorAll('.cchip'), function(el){
+    el.classList.toggle('on', el.getAttribute('data-v') === curCat);
   });
-  var ah = '';
-  ACCOUNTS.forEach(function(a){ ah += chipHtml(a, a === curAcc ? '' : '', false, a); });
-  $('acc-chips').innerHTML = ah;
-  Array.prototype.forEach.call($('acc-chips').querySelectorAll('.cchip'), function(el){
-    el.classList.remove('on');
-    if(el.getAttribute('data-v') === curAcc) el.classList.add('on');
-    el.addEventListener('click', function(){ curAcc = el.getAttribute('data-v'); renderChips(); });
+  Array.prototype.forEach.call(accBox.querySelectorAll('.cchip'), function(el){
+    el.classList.toggle('on', el.getAttribute('data-v') === curAcc);
   });
+  syncGlider(catBox, '.cchip.on');
+  syncGlider(accBox, '.cchip.on');
+}
+/* 弹层里所有滑块统一重新定位（弹层显示之后调用才准） */
+function syncSheetGliders(){
+  var tg = document.querySelector('.type-toggle');
+  syncGlider(tg, curType === 'expense' ? '#t-ex' : '#t-in', curType === 'expense' ? 'exp' : 'inc');
+  syncGlider($('cat-chips'), '.cchip.on');
+  syncGlider($('acc-chips'), '.cchip.on');
 }
 function chipHtml(v, emoji, on, labelOverride){
   return '<button class="cchip' + (on ? ' on' : '') + '" data-v="' + esc(v) + '">'
@@ -1415,15 +1502,20 @@ function setType(t){
   var has = list.some(function(c){ return c[0] === curCat; });
   if(!has) curCat = t === 'expense' ? '其他' : '其他收入';
   renderChips();
+  // 支出/收入滑块
+  var tg = document.querySelector('.type-toggle');
+  syncGlider(tg, t === 'expense' ? '#t-ex' : '#t-in', t === 'expense' ? 'exp' : 'inc');
 }
 function openSheet(id){
   editingId = id || null;
   var d = new Date();
   var local = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate())
     + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  // 先把弹层显示出来：隐藏元素量不到尺寸，滑块会缩成 0
+  $('mask').classList.add('show');
   if(id){
     var r = S.records[id];
-    if(!r) return;
+    if(!r){ $('mask').classList.remove('show'); return; }
     $('sheet-title').textContent = '编辑记录';
     setType(r.type);
     curCat = r.category || (r.type === 'income' ? '其他收入' : '其他');
@@ -1440,7 +1532,7 @@ function openSheet(id){
     $('btn-del').style.display = 'none';
   }
   renderChips();
-  $('mask').classList.add('show');
+  syncSheetGliders();
   setTimeout(function(){ $('f-amt').focus(); }, 250);
 }
 function closeSheet(){ $('mask').classList.remove('show'); editingId = null; }
@@ -1591,6 +1683,9 @@ function showPage(name){
   Array.prototype.forEach.call(document.querySelectorAll('.tabbar .tab'), function(t){
     t.classList.toggle('on', t.getAttribute('data-page') === name);
   });
+  // 任务栏滑块平滑滑到选中的 tab
+  var tb = document.querySelector('nav.tabbar');
+  syncGlider(tb, '.tab.on');
   window.scrollTo(0, 0);
 }
 function renderAll(){ renderList(); renderStats(); renderSyncStatus(); }
@@ -1657,6 +1752,30 @@ load();
 bind();
 fillCfgForm();
 renderAll();
+// 初始滑块位置（等布局稳定后再定位）
+function initGliders(){
+  syncGlider(document.querySelector('nav.tabbar'), '.tab.on');
+}
+if(window.requestAnimationFrame) requestAnimationFrame(initGliders);
+setTimeout(initGliders, 60);      // rAF 在后台标签页可能被节流，兜底一次
+window.addEventListener('load', function(){ setTimeout(initGliders, 30); });
+// 窗口尺寸/旋转变化后重新校准滑块（此时不要动画）
+window.addEventListener('resize', function(){
+  var tb = document.querySelector('nav.tabbar');
+  var g = tb && tb.querySelector('.glider');
+  if(g) g.style.transition = 'none';
+  syncGlider(tb, '.tab.on');
+  var tg = document.querySelector('.type-toggle');
+  if(tg) syncGlider(tg, curType === 'expense' ? '#t-ex' : '#t-in', curType === 'expense' ? 'exp' : 'inc');
+  syncGlider($('cat-chips'), '.cchip.on');
+  syncGlider($('acc-chips'), '.cchip.on');
+  requestAnimationFrame(function(){
+    [tb, tg, $('cat-chips'), $('acc-chips')].forEach(function(c){
+      var gg = c && c.querySelector('.glider');
+      if(gg) gg.style.transition = '';
+    });
+  });
+});
 setInterval(function(){
   if(S.cfg.auto && isCfgOk() && navigator.onLine && !document.hidden) sync(false);
 }, 180000);
