@@ -606,10 +606,10 @@
 
     <div class="card">
       <div class="card-head"><div class="card-title">🎁 分享给朋友</div></div>
-      <div class="card-sub">把这个网页发给朋友，他们打开就是<b>全新的空白账本</b>，看不到你的任何记录。</div>
+      <div class="card-sub">把网址发给朋友，他们打开就是<b>全新的空白账本</b>，看不到你的任何记录。</div>
       <div class="note" style="margin-bottom:12px;">
-        数据存在两个地方：<b>朋友自己的手机浏览器</b> + <b>朋友自己的 GitHub 仓库</b>。
-        跟你的完全隔离，互相看不到。
+        <b>数据隔离是怎么做到的：</b>这个网页本身不含任何数据。你的记录存在<b>你自己手机的浏览器</b> +
+        <b>你的私有 GitHub 仓库</b>里，朋友的数据存在他自己的地方。两边互不相通。
       </div>
       <div class="btn-row">
         <button class="btn btn-primary" id="btn-share">复制网址</button>
@@ -618,13 +618,15 @@
         <summary>朋友要做什么才能自动记账？</summary>
         <div class="tut-body">
           <ol>
-            <li>打开这个网址 → 添加到主屏幕（Safari 分享 → 添加到主屏幕），之后就能离线用</li>
-            <li>自己建一个 GitHub 仓库（例如也叫 <code>lazy-ledger</code>）</li>
-            <li>自己生成一个 token（只授权那一个仓库的 Contents 读写权限）</li>
-            <li>在 App「设置」里填：<b>自己的用户名 / 仓库名 / token</b> → 保存并测试连接</li>
+            <li>打开这个网址 → 添加到主屏幕（Safari 分享 → 添加到主屏幕），之后离线可用</li>
+            <li>准备一个 GitHub 仓库放数据（<b>建议设为私有</b>，否则账目会被公开看到）</li>
+            <li>生成一个 token（<b>只授权那一个仓库</b>的 Contents 读写权限）</li>
+            <li>在 App「设置」里填：用户名 / 仓库名 / token → 保存并测试连接</li>
             <li>照着「📱 快捷指令速查」搭一遍快捷指令（把里面的用户名换成自己的）</li>
           </ol>
-          <p style="margin:4px 0;">⚠️ <b>千万不要把你的 token 给别人</b> —— 那等于把仓库钥匙给出去。每个人用自己的。</p>
+          <p style="margin:4px 0;">⚠️ <b>千万不要把你的 token 给别人</b> —— 那等于把仓库钥匙交出去。每个人用自己的。</p>
+          <p style="margin:4px 0;">💡 <b>懒人做法</b>：如果朋友不想注册 GitHub，可以让朋友用你的账号 —— 但必须<b>单独建一个私有仓库</b>给他，
+          并且给他一个<b>只授权那个仓库</b>的 token。这样他动不了你的数据，你也随时能收回。</p>
           <button class="copy-mini" data-copy="https://github.com/reotho123-pixel/lazy-ledger/blob/main/README.md">复制完整搭建教程</button>
         </div>
       </details>
@@ -663,7 +665,7 @@
     </div>
 
     <div class="card green">
-      <div class="card-head"><div class="card-title">数据</div><span class="chip">v2.6</span></div>
+      <div class="card-head"><div class="card-title">数据</div><span class="chip">v2.7</span></div>
       <div class="card-sub">数据在本机浏览器 + 你的 GitHub 仓库，完全归你所有。懒人记账 · 纯前端离线 PWA。</div>
       <div class="note">云端若有分类写坏的旧记录（日期串/整段列表），同步时会自动修正并推回仓库，无需手动处理。</div>
       <div class="btn-row">
@@ -1164,19 +1166,36 @@ function pull(){
     });
     var fresh = files.filter(function(f){ return !S.known[f.path]; });
     fresh = fresh.slice(0, 300);
-    var o = S.cfg.owner, r = S.cfg.repo, br = S.cfg.branch;
     return fresh.reduce(function(c, f){
       return c.then(function(){
         var m = f.path.match(/^data\/(rec-.*)\.json$/);
         var idFromPath = m ? m[1] : null;
-        return fetch('https://raw.githubusercontent.com/' + o + '/' + r + '/' + br + '/' + f.path)
-          .then(function(res){ return res.ok ? res.text() : Promise.reject(new Error('raw ' + res.status)); })
-          .then(function(txt){
+        // 用 Contents API 读文件内容：私有仓库不能用 raw.githubusercontent.com
+        // 注意：GitHub 对 .json 文件可能直接返回裸 JSON（不套 base64 外壳），两种都要认
+        return ghApi('/repos/' + S.cfg.owner + '/' + S.cfg.repo + '/contents/' + f.path)
+          .then(function(j){
+            var txt = null;
+            if(j && typeof j.content === 'string' && j.content){
+              // 标准形态：{ content: "<base64>", sha: ... }
+              try{ txt = decodeURIComponent(escape(atob(j.content.replace(/\s/g, '')))); }
+              catch(e){ try{ txt = atob(j.content.replace(/\s/g, '')); }catch(e2){ txt = null; } }
+            } else if(j && typeof j === 'object' && (j.id || j.type || j.amount != null)){
+              // 裸记录形态：GitHub 直接把文件内容当 JSON 返回
+              var rec0 = normalizeRec(j, idFromPath);
+              S.records[rec0.id] = rec0;
+              S.known[f.path] = { sha: (j.sha) || f.sha };
+              if(rec0.fixed) S.pending[rec0.id] = true;
+              persist();
+              return;
+            } else if(typeof j === 'string'){
+              txt = j;
+            }
+            if(txt == null){ throw new Error('empty'); }
             var p = looseJson(txt);
             if(!p.ok){ throw new Error('bad json'); }
             var rec = normalizeRec(p.obj, idFromPath);
             S.records[rec.id] = rec;
-            S.known[f.path] = { sha: f.sha };
+            S.known[f.path] = { sha: (j && j.sha) || f.sha };
             // 云端分类坏了（日期串/整段列表）或 JSON 本身坏了被修，都把修好的推回去
             if(rec.fixed || p.repaired) S.pending[rec.id] = true;
             persist();
