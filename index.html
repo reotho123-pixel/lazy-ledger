@@ -484,8 +484,8 @@ var CAT_RULES = {
   income: [
     ['工资', ['工资','薪资','薪水','月薪','奖金','年终','绩效','补贴']],
     ['兼职', ['兼职','外快','私活','劳务']],
-    ['理财', ['理财','基金','股票','利息','收益','余额宝','定期']],
-    ['红包', ['红包','压岁钱','礼金','转账收入']],
+    ['理财', ['理财','基金','股票','利息','收益','余额宝','零钱通','定期']],
+    ['红包', ['红包','压岁钱','礼金','转账','收款','转入','收到','小荷包','亲密付','代付']],
     ['报销', ['报销','退款','退货','返现','赔付']]
   ]
 };
@@ -525,6 +525,22 @@ function guessCat(rec){
   if(cur && !isBadCat(cur) && cur !== '其他' && cur !== '其他收入') return null;
   var hit = autoCat(rec.raw, rec.type) || autoCat(rec.note, rec.type);
   return hit || null;
+}
+/* 分类是否属于该收支类型（收入/支出的分类表是分开的） */
+function isCatForType(cat, type){
+  var list = CATS[type === 'income' ? 'income' : 'expense'];
+  for(var i = 0; i < list.length; i++) if(list[i][0] === cat) return true;
+  return false;
+}
+/* 从识别全文里找金额和收支方向：账单页上「+150.00」是收入、「-7.97」是支出。
+   快捷指令的正则只认 - 号和「元」，收入页面的 + 号抓不到，金额会空、类型会记成支出。 */
+function parseRawAmount(text){
+  var s = String(text || '');
+  var m = s.match(/([+\-])\s*([0-9][0-9,]*\.[0-9]{1,2})/);
+  if(m) return { sign: m[1], value: Math.abs(parseFloat(m[2].replace(/,/g, ''))) || 0 };
+  m = s.match(/([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*元/);
+  if(m) return { sign: '', value: Math.abs(parseFloat(m[1].replace(/,/g, ''))) || 0 };
+  return null;
 }
 
 /* ============ 状态 ============ */
@@ -728,8 +744,23 @@ function normalizeRec(r, idFromPath){
   };
   // 快捷指令送来的截图识别全文，仅用于自动判断分类，不在界面上显示
   rec.raw = String(r.raw || r.ocr || '').slice(0, 2000);
+  // 收入页面写的是「+150.00」，快捷指令的正则抓不到，会记成支出+金额 0；
+  // 这里从识别全文里补出真实金额和收支方向
+  var rawType = r.type === 'income' ? 'income' : 'expense';
+  var rawAmt = rec.amount;
+  if(rec.src === 'shortcut' && rec.raw){
+    var pa = parseRawAmount(rec.raw);
+    if(pa && pa.sign === '+'){
+      rec.type = 'income';
+      if(!rec.amount || rec.amount === 0) rec.amount = pa.value;
+    } else if(pa && pa.sign === '-' && (!rec.amount || rec.amount === 0)){
+      rec.amount = pa.value;
+    }
+  }
   // 菜单输出被错绑成日期时会写进 "2026-10-07_01-40" 这类假分类，清掉重判
   if(isBadCat(rec.category)) rec.category = rec.type === 'income' ? '其他收入' : '其他';
+  // 类型被改成收入后，原来的支出分类（如「人情」）不再适用，重判成收入分类
+  if(!isCatForType(rec.category, rec.type)) rec.category = rec.type === 'income' ? '其他收入' : '其他';
   rec.ts = parseTs(rec.time);
   if(rec.ts && String(r.time || '').indexOf('_') >= 0){
     rec.time = ymdStr(rec.ts) + ' ' + hmStr(rec.ts);
@@ -739,7 +770,8 @@ function normalizeRec(r, idFromPath){
     var hit = guessCat(rec);
     if(hit){ rec.category = hit; rec.auto = true; }
   }
-  rec.fixed = (rec.category !== rawCat);   // 云端那条的分类是坏的，需要回推修正
+  // 分类是坏的、或类型/金额被上面修正过，都需要回推云端
+  rec.fixed = (rec.category !== rawCat) || (rec.type !== rawType) || (rec.amount !== rawAmt);
   return rec;
 }
 
