@@ -90,6 +90,10 @@
   .row .amt.ex{color:var(--red);}
   .row .amt.in{color:var(--green);}
   .row .pending-dot{display:inline-block; width:7px; height:7px; border-radius:50%; background:#f59e0b; margin-right:5px; vertical-align:1px;}
+  .auto-tag{
+    display:inline-block; margin-left:5px; padding:0 5px; border-radius:5px;
+    font-size:10px; font-weight:600; color:#7c3aed; background:#f3e8ff; vertical-align:1px;
+  }
 
   .empty{padding:34px 10px; text-align:center; color:var(--muted); font-size:13.5px;}
   .empty .big{font-size:38px; margin-bottom:8px;}
@@ -373,8 +377,9 @@
           <p style="margin:4px 0;">金额正则：</p>
           <pre>[-¥]\s*[0-9,]+\.[0-9]{1,2}|\d+(\.[0-9]+)?元</pre>
           <p style="margin:4px 0;">记录 JSON：</p>
-          <pre>{"id":"rec-[格式化后的日期]","type":"expense","amount":[更新后的文本],"category":"其他","note":"","account":"支付宝","time":"[格式化后的日期]","src":"shortcut"}</pre>
-          <p style="margin:4px 0;">⚠️ 422 = Base64 带了换行（检查去换行的替换文本）；分类默认「其他」，明细里点开可改。</p>
+          <pre>{"id":"rec-[格式化后的日期]","type":"expense","amount":[更新后的文本],"category":"其他","note":"","account":"支付宝","time":"[格式化后的日期]","src":"shortcut","raw":"[从截屏提取文本]"}</pre>
+          <p style="margin:4px 0;">v1.4：<b>raw = 识别出的全文</b>，App 会按关键词自动判分类（餐饮/交通/购物…），判出来的后面会带紫色「自动」标签，判不准就点开记录手动改。快捷指令里<b>不要再放分类菜单/列表</b>（iOS 27 会把它的输出错绑成日期）。</p>
+          <p style="margin:4px 0;">⚠️ 422 = Base64 带了换行（检查去换行的替换文本）；JSON 里必须用英文冒号 <code>:</code>；金额变量前后别留空格。</p>
           <button class="copy-mini" data-copy="[-¥]\s*[0-9,]+\.[0-9]{1,2}|\d+(\.[0-9]+)?元">复制金额正则</button>
           <button class="copy-mini" data-copy="https://github.com/reotho123-pixel/lazy-ledger/blob/main/README.md">复制完整教程链接</button>
         </div>
@@ -385,7 +390,7 @@
         <div class="tut-body">
           <ol>
             <li>付完款停在支付成功页 → <b>轻点背面两下</b>（设置→辅助功能→触控→轻点背面绑定）→ 点选金额</li>
-            <li>分类默认「其他」，明细里点开记录随时改</li>
+            <li>分类由 App 按识别文字自动判，带紫色「自动」标签；点开记录可改，改过的不会被重跑覆盖</li>
             <li>401=token 错；404=仓库/权限错；422=Base64 或 JSON 不合法</li>
           </ol>
         </div>
@@ -393,8 +398,9 @@
     </div>
 
     <div class="card green">
-      <div class="card-head"><div class="card-title">数据</div><span class="chip">v1.2</span></div>
+      <div class="card-head"><div class="card-title">数据</div><span class="chip">v1.4</span></div>
       <div class="card-sub">数据在本机浏览器 + 你的 GitHub 仓库，完全归你所有。懒人记账 · 纯前端离线 PWA。</div>
+      <div class="note">云端若有分类写坏的旧记录（日期串/整段列表），同步时会自动修正并推回仓库，无需手动处理。</div>
       <div class="btn-row">
         <button class="btn" id="btn-export">导出 JSON</button>
         <button class="btn" id="btn-import">导入 JSON</button>
@@ -402,8 +408,10 @@
       </div>
       <input type="file" id="file-import" accept=".json,application/json" style="display:none;">
       <div class="btn-row" style="margin-top:10px;">
+        <button class="btn" id="btn-recat">🔁 重新识别分类</button>
         <button class="btn btn-danger" id="btn-clear">清空本机数据</button>
       </div>
+      <div class="note" id="recat-note">快捷指令送来的账单带「识别全文」，App 按关键词自动判分类；这里可以一键对全部「其他」重新判一遍（已手动改过的不会被覆盖）。</div>
     </div>
   </section>
 </main>
@@ -459,6 +467,66 @@ var CATS = {
 };
 var ACCOUNTS = ['微信支付','支付宝','银行卡','现金','其他'];
 
+/* 关键词自动分类：快捷指令只管金额和时间，分类由 App 判断 */
+var CAT_RULES = {
+  expense: [
+    ['交通', ['打车','滴滴','地铁','公交','高铁','火车','机票','航空','加油','停车','单车','哈啰','青桔','出行','etc','车费','洗车','违章','摩拜']],
+    ['餐饮', ['餐','饭','美团','饿了么','外卖','食堂','咖啡','奶茶','星巴克','肯德基','麦当劳','汉堡','火锅','烧烤','小吃','米线','麻辣','food','水果','买菜','烘焙','面包','酒','餐厅','dining','拉面','面馆','牛肉面','小炒','盖饭','黄焖鸡','沙县','麻辣烫','串串','早茶','甜品','蛋糕','豆浆','粥','食堂','点心','食堂','快餐','简餐','酒馆','夜宵','烧烤']],
+    ['购物', ['淘宝','天猫','京东','拼多多','唯品会','商场','服饰','衣服','鞋','优衣库','zara','数码','家电','商城','旗舰店']],
+    ['日用', ['超市','便利','全家','罗森','美宜佳','纸巾','洗发','牙膏','日用','洗衣','沐浴','垃圾袋','牙膏']],
+    ['居住', ['房租','租金','水费','电费','燃气','物业','取暖','取暖费','中介费','押金']],
+    ['通讯', ['话费','流量','移动','联通','电信','宽带','充值','通讯','月租']],
+    ['医疗', ['医院','药店','买药','诊所','体检','挂号','医疗','口腔','看病']],
+    ['学习', ['书','课程','培训','学费','书店','考试','学习','网课','文具']],
+    ['娱乐', ['电影','影城','游戏','ktv','演唱会','会员','视频','音乐','网易','腾讯视频','爱奇艺','优酷','bilibili','哔哩','steam','健身','游泳','按摩','足浴']],
+    ['人情', ['红包','礼金','礼物','随礼','转账','压岁','份子']]
+  ],
+  income: [
+    ['工资', ['工资','薪资','薪水','月薪','奖金','年终','绩效','补贴']],
+    ['兼职', ['兼职','外快','私活','劳务']],
+    ['理财', ['理财','基金','股票','利息','收益','余额宝','定期']],
+    ['红包', ['红包','压岁钱','礼金','转账收入']],
+    ['报销', ['报销','退款','退货','返现','赔付']]
+  ]
+};
+function autoCat(text, type){
+  var s = String(text || '').toLowerCase();
+  if(!s.trim()) return null;
+  var rules = CAT_RULES[type === 'income' ? 'income' : 'expense'];
+  for(var i = 0; i < rules.length; i++){
+    var kw = rules[i][1];
+    for(var j = 0; j < kw.length; j++){
+      if(s.indexOf(kw[j]) >= 0) return rules[i][0];
+    }
+  }
+  return null;
+}
+/* 合法分类名集合（含两个「其他」占位） */
+var CAT_NAMES = (function(){
+  var m = {};
+  CATS.expense.concat(CATS.income).forEach(function(c){ m[c[0]] = true; });
+  m['其他'] = true; m['其他收入'] = true;
+  return m;
+})();
+/* 快捷指令把菜单输出错绑成日期时，写进来的是 "2026-10-06_17-50" 这种串，要当成无效值 */
+function isBadCat(c){
+  c = String(c == null ? '' : c).trim();
+  if(!c) return true;
+  if(CAT_NAMES[c]) return false;
+  if(/\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(c)) return true;   // 含日期
+  if(/^\d{1,2}[-:.]\d{2}([-:.]\d{2})?$/.test(c)) return true; // 纯时间
+  if(c.length > 12) return true;                            // 整段列表/长文本
+  if(c.indexOf('\n') >= 0) return true;
+  return false;
+}
+function guessCat(rec){
+  // 依据：识别文本 + 备注。分类已被人工指定（合法且非「其他」）时不动。
+  var cur = String(rec.category || '').trim();
+  if(cur && !isBadCat(cur) && cur !== '其他' && cur !== '其他收入') return null;
+  var hit = autoCat(rec.raw, rec.type) || autoCat(rec.note, rec.type);
+  return hit || null;
+}
+
 /* ============ 状态 ============ */
 var S = {
   records: {},           // id -> record
@@ -494,6 +562,14 @@ function load(){
     for(var id in S.records){
       var r = S.records[id];
       if(!r.ts){ r.ts = parseTs(r.time); }
+      if(r.src === 'shortcut' && !r.raw) r.raw = '';   // 旧记录没有识别全文
+      if(r.manual) r.auto = false;                      // 手动改过的不再显示「自动」
+      // 修掉历史坏数据：假分类（日期串等）清掉重判
+      if(!r.manual && isBadCat(r.category)){
+        r.category = r.type === 'income' ? '其他收入' : '其他';
+        var fix = autoCat(r.raw, r.type) || autoCat(r.note, r.type);
+        if(fix){ r.category = fix; r.auto = true; }
+      }
     }
   }catch(e){ /* 脏数据兜底：保留默认 */ }
 }
@@ -565,21 +641,101 @@ function sanitizeId(id){
 function b64(str){
   return btoa(unescape(encodeURIComponent(str)));
 }
+/* 快捷指令偶尔会写出坏 JSON（如金额为空变成 "amount":, ，或把多行文本直接塞进字符串），
+   整条都无法解析；这里做一次宽松修复，尽量把记录救回来而不是整条丢掉。
+   返回 { ok, obj, repaired }：repaired=true 表示原文是坏的、需要回推修正。 */
+function escapeCtl(s){
+  // 把字符串字面量里未转义的控制字符（真实换行/制表符等）转成合法转义
+  var out = '', inStr = false, esc = false;
+  for(var i = 0; i < s.length; i++){
+    var ch = s.charAt(i), code = s.charCodeAt(i);
+    if(esc){ out += ch; esc = false; continue; }
+    if(ch === '\\'){ out += ch; esc = true; continue; }
+    if(ch === '"'){ inStr = !inStr; out += ch; continue; }
+    if(inStr && code < 0x20){
+      if(ch === '\n') out += '\\n';
+      else if(ch === '\r') out += '\\r';
+      else if(ch === '\t') out += '\\t';
+      else out += '\\u' + ('000' + code.toString(16)).slice(-4);
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+/* 更激进：只有「后面跟着 , : } ] 或结尾」的引号才当作分隔符，其余引号一律转义成内容。
+   能救回 raw 里既有换行又有英文引号的情况（如 商户 "肯德基"）。 */
+function escapeCtlSmart(s){
+  var out = '', inStr = false, esc = false;
+  for(var i = 0; i < s.length; i++){
+    var ch = s.charAt(i), code = s.charCodeAt(i);
+    if(esc){ out += ch; esc = false; continue; }
+    if(ch === '\\'){ out += ch; esc = true; continue; }
+    if(ch === '"'){
+      if(!inStr){ inStr = true; out += ch; continue; }
+      var j = i + 1, nx = '';
+      while(j < s.length && /\s/.test(s.charAt(j))) j++;
+      nx = s.charAt(j);
+      if(nx === ',' || nx === ':' || nx === '}' || nx === ']' || nx === ''){ inStr = false; out += ch; }
+      else out += '\\"';   // 引号在内容里
+      continue;
+    }
+    if(inStr && code < 0x20){
+      if(ch === '\n') out += '\\n';
+      else if(ch === '\r') out += '\\r';
+      else if(ch === '\t') out += '\\t';
+      else out += '\\u' + ('000' + code.toString(16)).slice(-4);
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+function looseJson(text){
+  var s = String(text == null ? '' : text);
+  try{ return { ok: true, obj: JSON.parse(s), repaired: false }; }catch(e){}
+  var cands = [
+    s.replace(/:\s*,/g, ':0,')         // "amount":,   -> "amount":0,
+     .replace(/:\s*([}\]])/g, ':0$1')  // "amount":}   -> "amount":0}
+     .replace(/,\s*([}\]])/g, '$1'),   // 去掉多余逗号
+    escapeCtl(s),                      // 字符串里塞了真实换行 -> 转义
+    escapeCtl(s.replace(/:\s*,/g, ':0,').replace(/:\s*([}\]])/g, ':0$1').replace(/,\s*([}\]])/g, '$1')),
+    // 兜底 1：无条件转义所有控制字符
+    s.replace(/[\r\n\t]/g, function(c){ return c === '\n' ? '\\n' : c === '\r' ? '\\r' : '\\t'; }),
+    // 兜底 2：引号也做智能判断（救 raw 里既有换行又有英文引号的情况）
+    escapeCtlSmart(s)
+  ];
+  for(var i = 0; i < cands.length; i++){
+    try{ return { ok: true, obj: JSON.parse(cands[i]), repaired: true }; }catch(e){}
+  }
+  return { ok: false, obj: null, repaired: false };
+}
 function normalizeRec(r, idFromPath){
+  var rawCat = String(r.category || '').trim();
   var rec = {
     id: sanitizeId(r.id || idFromPath),
     type: r.type === 'income' ? 'income' : 'expense',
     amount: Math.abs(Number(r.amount)) || 0,
-    category: String(r.category || '其他'),
+    category: rawCat,
     note: String(r.note || ''),
     account: String(r.account || ''),
     time: String(r.time || ''),
     src: String(r.src || 'shortcut')
   };
+  // 快捷指令送来的截图识别全文，仅用于自动判断分类，不在界面上显示
+  rec.raw = String(r.raw || r.ocr || '').slice(0, 2000);
+  // 菜单输出被错绑成日期时会写进 "2026-10-07_01-40" 这类假分类，清掉重判
+  if(isBadCat(rec.category)) rec.category = rec.type === 'income' ? '其他收入' : '其他';
   rec.ts = parseTs(rec.time);
   if(rec.ts && String(r.time || '').indexOf('_') >= 0){
     rec.time = ymdStr(rec.ts) + ' ' + hmStr(rec.ts);
   }
+  rec.auto = false;
+  if(rec.src === 'shortcut'){
+    var hit = guessCat(rec);
+    if(hit){ rec.category = hit; rec.auto = true; }
+  }
+  rec.fixed = (rec.category !== rawCat);   // 云端那条的分类是坏的，需要回推修正
   return rec;
 }
 
@@ -709,11 +865,15 @@ function pull(){
         var m = f.path.match(/^data\/(rec-.*)\.json$/);
         var idFromPath = m ? m[1] : null;
         return fetch('https://raw.githubusercontent.com/' + o + '/' + r + '/' + br + '/' + f.path)
-          .then(function(res){ return res.ok ? res.json() : Promise.reject(new Error('raw ' + res.status)); })
-          .then(function(j){
-            var rec = normalizeRec(j, idFromPath);
+          .then(function(res){ return res.ok ? res.text() : Promise.reject(new Error('raw ' + res.status)); })
+          .then(function(txt){
+            var p = looseJson(txt);
+            if(!p.ok){ throw new Error('bad json'); }
+            var rec = normalizeRec(p.obj, idFromPath);
             S.records[rec.id] = rec;
             S.known[f.path] = { sha: f.sha };
+            // 云端分类坏了（日期串/整段列表）或 JSON 本身坏了被修，都把修好的推回去
+            if(rec.fixed || p.repaired) S.pending[rec.id] = true;
             persist();
           })
           .catch(function(){ /* 单个文件坏了不阻塞整体 */ });
@@ -737,6 +897,8 @@ function sync(manual){
   var hadErr = null;
   var pre = isCfgOk() ? pushPending() : Promise.resolve();
   pre.then(function(){ return pull(); })
+    // 拉取时若发现云端分类是坏的，pull 已把它们放进 pending，这里顺手推回去
+    .then(function(){ return isCfgOk() ? pushPending() : Promise.resolve(); })
     .then(function(){
       S.lastSync = Date.now(); persist();
     })
@@ -813,7 +975,8 @@ function renderList(){
         + '<div class="emoji">' + catEmoji(r.category) + '</div>'
         + '<div class="mid"><div class="t1">'
         + (S.pending[r.id] ? '<span class="pending-dot"></span>' : '')
-        + esc(r.category) + (r.note ? ' · ' + esc(r.note) : '') + '</div>'
+        + esc(r.category) + (r.auto ? '<span class="auto-tag">自动</span>' : '')
+        + (r.note ? ' · ' + esc(r.note) : '') + '</div>'
         + '<div class="t2">' + esc(r.account || '—') + ' · ' + esc(r.time || '时间未知')
         + (r.src === 'shortcut' ? ' · ⚡自动' : '') + '</div></div>'
         + '<div class="amt ' + (isInc ? 'in' : 'ex') + '">' + (isInc ? '+' : '-') + esc(money(r.amount)) + '</div>'
@@ -1029,6 +1192,10 @@ function saveSheet(){
     rec.id = editingId;
     rec.src = S.records[editingId] && S.records[editingId].src === 'shortcut' ? 'shortcut' : 'web';
     rec.ts = parseTs(rec.time);
+    var wasShortcut = rec.src === 'shortcut';
+    rec.raw   = wasShortcut ? (S.records[editingId].raw || '') : '';
+    rec.auto  = false;
+    rec.manual = true;   // 手动编辑过的，重跑分类时跳过
     S.records[editingId] = rec;
     S.pending[editingId] = true;   // 已有云文件的用 known sha 覆盖更新
     toast('已更新 ✔');
@@ -1054,7 +1221,22 @@ function delRecord(){
   if(isCfgOk() && navigator.onLine) sync(false);
 }
 
-/* ============ 设置 / 数据 ============ */
+function reCategorize(){
+  var n = 0;
+  for(var id in S.records){
+    var r = S.records[id];
+    if(r.manual) continue;                      // 手动改过的不动
+    var cur = String(r.category || '').trim();
+    var bad = isBadCat(cur);                    // 假分类（日期串等）也一起修
+    if(!bad && cur && cur !== '其他' && cur !== '其他收入') continue;
+    var hit = autoCat(r.raw, r.type) || autoCat(r.note, r.type);
+    if(hit && hit !== cur){ r.category = hit; r.auto = true; n++; }
+    else if(bad){ r.category = r.type === 'income' ? '其他收入' : '其他'; r.auto = false; n++; }
+  }
+  if(n){ persist(); renderAll(); }
+  toast(n ? ('重新识别了 ' + n + ' 条 ✔') : '没有可重新识别的记录');
+  return n;
+}
 function fillCfgForm(){
   $('cfg-owner').value = S.cfg.owner || '';
   $('cfg-repo').value = S.cfg.repo || 'lazy-ledger';
@@ -1177,6 +1359,7 @@ function bind(){
     this.className = S.cfg.auto ? 'sw on' : 'sw';
     persist();
   });
+  $('btn-recat').addEventListener('click', reCategorize);
   $('btn-export').addEventListener('click', exportJson);
   $('btn-csv').addEventListener('click', exportCsv);
   $('btn-import').addEventListener('click', function(){ $('file-import').click(); });
