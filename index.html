@@ -479,7 +479,7 @@ var CAT_RULES = {
     ['医疗', ['医院','药店','买药','诊所','体检','挂号','医疗','口腔','看病']],
     ['学习', ['书','课程','培训','学费','书店','考试','学习','网课','文具']],
     ['娱乐', ['电影','影城','游戏','ktv','演唱会','会员','视频','音乐','网易','腾讯视频','爱奇艺','优酷','bilibili','哔哩','steam','健身','游泳','按摩','足浴']],
-    ['人情', ['红包','礼金','礼物','随礼','转账','压岁','份子']]
+    ['人情', ['红包','礼金','礼物','随礼','转账','压岁','份子','小荷包','亲密付','代付','转给']]
   ],
   income: [
     ['工资', ['工资','薪资','薪水','月薪','奖金','年终','绩效','补贴']],
@@ -712,15 +712,19 @@ function looseJson(text){
 }
 function normalizeRec(r, idFromPath){
   var rawCat = String(r.category || '').trim();
+  // 快捷指令偶尔在字段值末尾多打引号（如 "src":"shortcut"" ），会让枚举字段失配
+  function clean(v){ return String(v == null ? '' : v).replace(/["']+$/, '').trim(); }
+  var src = clean(r.src);
+  if(src !== 'shortcut' && src !== 'web') src = 'shortcut';
   var rec = {
-    id: sanitizeId(r.id || idFromPath),
+    id: sanitizeId(clean(r.id) || idFromPath),
     type: r.type === 'income' ? 'income' : 'expense',
     amount: Math.abs(Number(r.amount)) || 0,
     category: rawCat,
     note: String(r.note || ''),
-    account: String(r.account || ''),
-    time: String(r.time || ''),
-    src: String(r.src || 'shortcut')
+    account: clean(r.account),
+    time: clean(r.time),
+    src: src
   };
   // 快捷指令送来的截图识别全文，仅用于自动判断分类，不在界面上显示
   rec.raw = String(r.raw || r.ocr || '').slice(0, 2000);
