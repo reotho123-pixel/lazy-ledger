@@ -16,7 +16,7 @@
 <meta name="apple-mobile-web-app-title" content="懒人记账">
 <style>
   :root{
-    --bg:#f3f6fd; --card:#ffffff; --text:#1f2937; --muted:#5f6b7c;
+    --bg:#fdfbf8; --card:#ffffff; --text:#1f2937; --muted:#5f6b7c;
     --line:#e5e7eb; --brand:#4f46e5; --brand-bg:#eef2ff;
     --green:#16a34a; --green-bg:#f0fdf4;
     --red:#ef4444; --red-bg:#fef2f2;
@@ -37,14 +37,13 @@
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
     line-height:1.5;
     padding-bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 30px);
-    /* 蓝紫冷调，浅一些 */
-    background:#f3f6fd;
+    /* 暖米白：奶油渐变，很淡 */
+    background:#fdfbf8;
     background-image:
-      radial-gradient(at 6% 0%,    rgba(158,186,255,.34) 0px, transparent 56%),
-      radial-gradient(at 96% 4%,   rgba(196,166,255,.30) 0px, transparent 52%),
-      radial-gradient(at 100% 52%, rgba(146,176,255,.24) 0px, transparent 56%),
-      radial-gradient(at 0% 94%,   rgba(178,196,255,.28) 0px, transparent 56%),
-      radial-gradient(at 52% 100%, rgba(206,186,255,.22) 0px, transparent 58%);
+      radial-gradient(at 12% -6%,  rgba(255,241,220,.62) 0px, transparent 62%),
+      radial-gradient(at 96% 10%,  rgba(250,235,214,.50) 0px, transparent 58%),
+      radial-gradient(at -6% 58%,  rgba(253,243,228,.46) 0px, transparent 58%),
+      radial-gradient(at 88% 98%,  rgba(252,238,222,.42) 0px, transparent 58%);
     background-attachment:fixed;
     background-repeat:no-repeat;
   }
@@ -174,25 +173,27 @@
     will-change:transform, width, height;
   }
   .glider.show{opacity:1;}
-  /* 任务栏：玻璃胶囊 */
+  /* 任务栏：玻璃胶囊（更透） */
   nav.tabbar .glider{
     border-radius:var(--r-md);
-    background:rgba(255,255,255,.62);
-    box-shadow:0 4px 16px rgba(31,38,135,.10), inset 0 1px 0 rgba(255,255,255,.95);
+    background:rgba(255,255,255,.40);
+    box-shadow:0 3px 14px rgba(31,38,135,.09), inset 0 1px 0 rgba(255,255,255,.85);
   }
-  /* 支出/收入分段：白胶囊，带红/绿淡色 */
+  /* 支出/收入分段：淡色玻璃，几乎透明 */
   .type-toggle .glider{
     border-radius:var(--r-sm);
-    background:rgba(255,255,255,.95);
-    box-shadow:0 2px 8px rgba(31,38,135,.10);
+    background:rgba(255,255,255,.72);
+    box-shadow:0 2px 8px rgba(31,38,135,.08), inset 0 1px 0 rgba(255,255,255,.9);
   }
-  .type-toggle .glider.exp{background:rgba(255,248,248,.97);}
-  .type-toggle .glider.inc{background:rgba(246,255,249,.97);}
-  /* 分类 / 支付方式：渐变紫胶囊 */
+  .type-toggle .glider.exp{background:rgba(255,242,242,.72);}
+  .type-toggle .glider.inc{background:rgba(240,253,244,.72);}
+  /* 分类 / 支付方式：半透明紫滑块（比之前透很多） */
   .chips .glider, .achips .glider{
     border-radius:var(--r-md);
-    background:linear-gradient(135deg,rgba(99,102,241,.92),rgba(79,70,229,.92));
-    box-shadow:0 5px 16px rgba(79,70,229,.34), inset 0 1px 0 rgba(255,255,255,.4);
+    background:linear-gradient(135deg,rgba(165,180,252,.62),rgba(129,140,248,.68));
+    box-shadow:0 4px 16px rgba(79,70,229,.20), inset 0 1px 0 rgba(255,255,255,.55);
+    -webkit-backdrop-filter:blur(12px) saturate(180%);
+    backdrop-filter:blur(12px) saturate(180%);
   }
   .achips .glider{border-radius:var(--r-pill);}
 
@@ -458,8 +459,8 @@
   }
   .cchip:active{transform:scale(.95);}
   .cchip .ce{display:block; font-size:19px; margin-bottom:2px;}
-  /* 选中：底色由 .glider 提供 */
-  .cchip.on{color:#fff; border-color:rgba(255,255,255,.45);}
+  /* 选中：底色由 .glider 提供。滑块较透，用深紫字 + 浅描边保证可读 */
+  .cchip.on{color:#3730a3; border-color:rgba(255,255,255,.5);}
   .achips{position:relative; display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px;}
   .achip{
     position:relative; z-index:1;
@@ -471,7 +472,7 @@
     transition:transform .16s, color .22s, border-color .22s;
   }
   .achip:active{transform:scale(.95);}
-  .achip.on{color:#fff; border-color:rgba(255,255,255,.45);}
+  .achip.on{color:#3730a3; border-color:rgba(255,255,255,.5);}
   .sec-lb{font-size:12.5px; font-weight:700; color:var(--muted); margin-bottom:7px;}
   .note-input{
     width:100%; border:1px solid rgba(255,255,255,.85); border-radius:var(--r-md); padding:12px 14px; font-size:14px; margin-bottom:13px;
@@ -621,7 +622,7 @@
     </div>
 
     <div class="card green">
-      <div class="card-head"><div class="card-title">数据</div><span class="chip">v2.2</span></div>
+      <div class="card-head"><div class="card-title">数据</div><span class="chip">v2.3</span></div>
       <div class="card-sub">数据在本机浏览器 + 你的 GitHub 仓库，完全归你所有。懒人记账 · 纯前端离线 PWA。</div>
       <div class="note">云端若有分类写坏的旧记录（日期串/整段列表），同步时会自动修正并推回仓库，无需手动处理。</div>
       <div class="btn-row">
