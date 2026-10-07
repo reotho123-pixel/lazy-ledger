@@ -1,9 +1,1 @@
-{"id":"rec-2026-10-07_00-52","type":"expense","amount":,"category":"餐饮
-交通
-购物
-日用
-居住
-娱乐
-医疗
-其他
-","note":"","account":"微信支付","time":"2026-10-07_00-52","src":"shortcut"}
+{"id":"rec-2026-10-07_00-52","type":"expense","amount":0,"category":"其他","note":"","account":"微信支付","time":"2026-10-07 00:52","src":"shortcut","raw":"","ts":1791305520000,"auto":false,"fixed":true}
