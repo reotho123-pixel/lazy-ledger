@@ -790,6 +790,16 @@ function renderSyncStatus(){
   }
 }
 
+/* 推送到仓库的记录只保留业务字段 + raw（分类依据）。
+   ts/auto/fixed/manual 是 App 本地状态，不该污染仓库文件。 */
+function cloudRec(rec){
+  var o = {
+    id: rec.id, type: rec.type, amount: rec.amount, category: rec.category,
+    note: rec.note, account: rec.account, time: rec.time, src: rec.src
+  };
+  if(rec.raw) o.raw = rec.raw;
+  return o;
+}
 function pushPending(){
   var ids = Object.keys(S.pending);
   var chain = Promise.resolve();
@@ -798,7 +808,7 @@ function pushPending(){
       var rec = S.records[id];
       if(!rec){ delete S.pending[id]; return Promise.resolve(); }
       var path = 'data/' + id + '.json';
-      var body = { message: 'ledger: ' + (rec.time || ymdStr(Date.now())), content: b64(JSON.stringify(rec)) };
+      var body = { message: 'ledger: ' + (rec.time || ymdStr(Date.now())), content: b64(JSON.stringify(cloudRec(rec))) };
       if(S.known[path]) body.sha = S.known[path].sha;
       return ghApi('/repos/' + S.cfg.owner + '/' + S.cfg.repo + '/contents/' + path, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
