@@ -51,9 +51,10 @@
   input,select,textarea{font-family:inherit;}
 
   /* ---------- 顶部：悬浮圆润玻璃岛 ---------- */
+  /* margin-top 和 sticky top 都要加安全区（刘海），否则标题栏被状态栏压住 */
   header{
-    position:sticky; top:8px; z-index:35;
-    margin:8px 12px 0;
+    position:sticky; top:calc(6px + env(safe-area-inset-top)); z-index:35;
+    margin:calc(6px + env(safe-area-inset-top)) 12px 0;
     padding:11px 18px 12px;
     text-align:center;
     border-radius:var(--r-lg);
@@ -115,8 +116,21 @@
   }
 
   /* ---------- 明细 ---------- */
+  /* 筛选条：吸顶停靠（滚动时贴在标题栏下面） */
+  .list-bar{
+    position:sticky; z-index:20;
+    top:88px;   /* JS 会按标题栏实际高度校准 */
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    margin:0 0 12px; padding:10px 16px;
+    border-radius:var(--r-lg);
+    background:rgba(255,255,255,.40);
+    -webkit-backdrop-filter:var(--blur);
+    backdrop-filter:var(--blur);
+    border:1px solid var(--glass-line);
+    box-shadow:var(--glass-shadow), var(--glass-edge);
+  }
   .month-filter{
-    border:1px solid rgba(255,255,255,.85); border-radius:999px; padding:6px 12px; font-size:13px;
+    border:1px solid rgba(255,255,255,.85); border-radius:var(--r-pill); padding:6px 12px; font-size:13px;
     background:rgba(255,255,255,.7); color:var(--text); font-weight:600;
     -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
   }
@@ -160,16 +174,17 @@
   .empty .big{font-size:38px; margin-bottom:8px;}
 
   /* ---------- iOS 式滑块指示器 ---------- */
-  /* 一个绝对定位的色块，靠 transform 平滑滑到选中项下面，而不是瞬间跳 */
+  /* 一个绝对定位的色块，靠 transform 平滑滑到选中项下面，而不是瞬间跳。
+     用 iOS 那条长尾减速曲线（无回弹），滑起来是「慢慢停住」而不是「弹一下」 */
   .glider{
     position:absolute; top:0; left:0; z-index:0; pointer-events:none;
     opacity:0;
     transition:
-      transform .40s cubic-bezier(.34,1.28,.52,1),
-      width    .34s cubic-bezier(.4,.9,.3,1),
-      height   .34s cubic-bezier(.4,.9,.3,1),
-      background-color .28s ease,
-      opacity  .16s linear;
+      transform .28s cubic-bezier(.32,.72,0,1),
+      width     .28s cubic-bezier(.32,.72,0,1),
+      height    .28s cubic-bezier(.32,.72,0,1),
+      background-color .26s cubic-bezier(.32,.72,0,1),
+      opacity   .18s linear;
     will-change:transform, width, height;
   }
   .glider.show{opacity:1;}
@@ -519,11 +534,11 @@
 <main>
   <!-- 明细 -->
   <section id="page-list" class="page active">
-    <div class="card">
-      <div class="card-head">
-        <div class="card-title">账单明细</div>
-        <select id="month-filter" class="month-filter"></select>
-      </div>
+    <div class="list-bar">
+      <div class="card-title">账单明细</div>
+      <select id="month-filter" class="month-filter"></select>
+    </div>
+    <div class="card" style="padding-top:8px;">
       <div id="list-body"><div class="empty"><div class="big">🧾</div>还没有记录，点右下角 ＋ 记一笔吧</div></div>
     </div>
   </section>
@@ -648,7 +663,7 @@
     </div>
 
     <div class="card green">
-      <div class="card-head"><div class="card-title">数据</div><span class="chip">v2.4</span></div>
+      <div class="card-head"><div class="card-title">数据</div><span class="chip">v2.6</span></div>
       <div class="card-sub">数据在本机浏览器 + 你的 GitHub 仓库，完全归你所有。懒人记账 · 纯前端离线 PWA。</div>
       <div class="note">云端若有分类写坏的旧记录（日期串/整段列表），同步时会自动修正并推回仓库，无需手动处理。</div>
       <div class="btn-row">
@@ -1792,12 +1807,22 @@ renderAll();
 // 初始滑块位置（等布局稳定后再定位）
 function initGliders(){
   syncGlider(document.querySelector('nav.tabbar'), '.tab.on');
+  calibrateSticky();
+}
+/* 筛选条吸顶位置 = 标题栏底边（标题栏是 sticky，高度会随安全区/字号变） */
+function calibrateSticky(){
+  var hd = document.querySelector('header'), bar = document.querySelector('.list-bar');
+  if(!hd || !bar) return;
+  var r = hd.getBoundingClientRect();
+  // 标题栏 sticky top 是 8px，留一点间隙避免视觉重叠
+  bar.style.top = Math.round(r.bottom + 6) + 'px';
 }
 if(window.requestAnimationFrame) requestAnimationFrame(initGliders);
 setTimeout(initGliders, 60);      // rAF 在后台标签页可能被节流，兜底一次
 window.addEventListener('load', function(){ setTimeout(initGliders, 30); });
 // 窗口尺寸/旋转变化后重新校准滑块（此时不要动画）
 window.addEventListener('resize', function(){
+  calibrateSticky();
   var tb = document.querySelector('nav.tabbar');
   var g = tb && tb.querySelector('.glider');
   if(g) g.style.transition = 'none';
