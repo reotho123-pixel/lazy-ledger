@@ -99,56 +99,75 @@
   .empty .big{font-size:38px; margin-bottom:8px;}
 
   /* ---------- 统计 ---------- */
-  .stat-nav{display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:12px;}
-  .stat-nav .ym{font-size:16px; font-weight:700; min-width:104px; text-align:center;}
+  .stat-nav{display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;}
+  .stat-nav .ym{font-size:16px; font-weight:700; letter-spacing:.3px;}
   .nav-btn{
-    width:32px; height:32px; border-radius:10px; border:1px solid var(--line); background:#f9fafb;
-    font-size:15px; color:var(--muted); cursor:pointer; display:flex; align-items:center; justify-content:center;
+    width:34px; height:34px; border-radius:11px; border:1px solid var(--line); background:#fff;
+    font-size:16px; color:var(--muted); cursor:pointer; display:flex; align-items:center; justify-content:center;
   }
-  .stat-boxes{display:grid; grid-template-columns:repeat(3,1fr); gap:9px;}
-  .stat-box{border-radius:12px; padding:11px 6px; text-align:center; background:#f9fafb; border:1px solid var(--line);}
-  .stat-box .lb{font-size:12px; color:var(--muted);}
-  .stat-box .v{font-size:16.5px; font-weight:800; margin-top:3px; color:var(--text);}
-  .stat-box.ex{background:var(--red-bg); border-color:#fecaca;}
-  .stat-box.ex .v{color:var(--red);}
-  .stat-box.in{background:var(--green-bg); border-color:#bbf7d0;}
-  .stat-box.in .v{color:var(--green);}
-  .stat-box.bal .v{color:var(--brand);}
+  .nav-btn:active{background:#f3f4f6;}
 
-  .cat-row{display:flex; align-items:center; gap:9px; padding:7px 0;}
-  .cat-row .ce{flex:none; font-size:17px; width:24px; text-align:center;}
-  .cat-row .cn{flex:none; width:58px; font-size:13.5px; font-weight:600;}
-  .cat-row .bar{flex:1; height:10px; border-radius:999px; background:#f1f2f6; overflow:hidden;}
-  .cat-row .bar i{display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,#6366f1,#a855f7); width:0;}
-  .cat-row .cv{flex:none; width:86px; text-align:right; font-size:12.5px; color:var(--muted);}
-  .cat-row .cv b{color:var(--text); font-size:13px;}
+  /* 月度汇总：一个大数字 + 三个小指标 */
+  .sum-main{text-align:center; padding:10px 0 14px; border-bottom:1px dashed var(--line); margin-bottom:13px;}
+  .sum-main .sum-lb{font-size:12.5px; color:var(--muted);}
+  .sum-main .sum-v{font-size:31px; font-weight:800; color:var(--red); letter-spacing:-.5px; margin-top:1px; line-height:1.15;}
+  .sum-main .sum-sub{font-size:12px; color:var(--muted); margin-top:5px;}
+  .sum-main .sum-sub .up{color:var(--red);}
+  .sum-main .sum-sub .down{color:var(--green);}
+  .sum-split{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
+  .sum-item{text-align:center;}
+  .sum-item .si-lb{display:block; font-size:11.5px; color:var(--muted); margin-bottom:3px;}
+  .sum-item .si-v{font-size:15px; font-weight:700;}
+  .sum-item .si-v.in{color:var(--green);}
+  .sum-item .si-v.bal{color:var(--brand);}
 
-  .trend{display:flex; align-items:flex-end; gap:2px; height:74px; padding-top:6px;}
-  .trend .tb{flex:1; min-width:3px; background:linear-gradient(180deg,#818cf8,#4f46e5); border-radius:3px 3px 0 0; min-height:2px;}
-  .trend-lb{display:flex; justify-content:space-between; font-size:10.5px; color:var(--muted); margin-top:5px;}
-
-  /* ---------- 饼图 + 每月收支 ---------- */
-  .pie-svg{width:176px; height:176px; display:block; margin:0 auto;}
-  .pie-num{font-size:12px; font-weight:800; fill:#1f2937;}
-  .pie-lb{font-size:7.5px; fill:#6b7280;}
-  .legend-row{display:flex; align-items:center; gap:8px; padding:7px 2px; border-bottom:1px solid #f1f2f6; font-size:13px;}
+  /* 分类占比：环形图 + 带比例条的图例 */
+  .pie-svg{width:168px; height:168px; display:block; margin:2px auto 10px;}
+  .pie-num{font-size:13px; font-weight:800; fill:#1f2937;}
+  .pie-lb{font-size:8px; fill:#9ca3af;}
+  .legend-row{display:flex; align-items:center; gap:9px; padding:9px 2px; border-bottom:1px solid #f1f2f6;}
   .legend-row:last-child{border-bottom:none;}
-  .legend-dot{width:10px; height:10px; border-radius:3px; flex:none;}
-  .le-emoji{flex:none; font-size:15px;}
-  .le-name{flex:1; font-weight:600;}
-  .le-pct{flex:none; color:var(--muted); font-size:12px; width:38px; text-align:right;}
-  .le-amt{flex:none; width:86px; text-align:right; font-size:13px;}
-  .mbars{display:flex; align-items:flex-end; gap:4px; height:112px;}
-  .mcol{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; cursor:pointer; border-radius:8px; padding:2px 0;}
-  .mcol:active{background:#f3f4f6;}
-  .mcol.on{background:var(--brand-bg);}
-  .mval{font-size:9.5px; color:var(--muted); margin-bottom:3px; white-space:nowrap; max-width:100%; overflow:hidden;}
-  .mbar{display:flex; align-items:flex-end; gap:2px; height:72px;}
-  .mbar i{display:block; width:10px; border-radius:3px 3px 0 0; background:#e5e7eb;}
-  .mbar i.ex{background:linear-gradient(180deg,#818cf8,#4f46e5);}
-  .mbar i.in{background:linear-gradient(180deg,#4ade80,#16a34a);}
-  .mlb{font-size:10.5px; color:var(--muted); margin-top:4px;}
+  .le-emoji{flex:none; font-size:17px; width:23px; text-align:center;}
+  .le-mid{flex:1; min-width:0; display:block;}
+  .le-top{display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:5px;}
+  .le-name{font-size:13px; font-weight:600;}
+  .le-amt{font-size:13px; font-weight:700; white-space:nowrap;}
+  .le-bar{display:block; height:6px; border-radius:99px; background:#f1f2f6; overflow:hidden;}
+  .le-bar i{display:block; height:100%; border-radius:99px;}
+  .le-pct{flex:none; width:38px; text-align:right; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums;}
+
+  /* 每月支出：宽柱 + 顶部数值 */
+  .mchart{display:flex; align-items:flex-end; gap:8px; height:148px; padding-top:34px;}
+  .mcol{
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end;
+    height:100%; cursor:pointer; border-radius:10px; position:relative;
+  }
+  .mcol:active{background:#f9fafb;}
+  .mcol .mval{
+    position:absolute; top:-15px; left:0; right:0; text-align:center;
+    font-size:9.5px; font-weight:700; color:var(--muted);
+    white-space:nowrap; font-variant-numeric:tabular-nums; overflow:hidden;
+  }
+  .mcol.on .mval{color:var(--brand); font-size:10.5px;}
+  .mcol .mflag{
+    position:absolute; top:-27px; left:0; right:0; text-align:center;
+    font-size:9px; font-weight:700; color:var(--green); white-space:nowrap; overflow:hidden;
+  }
+  .mcol .mbar{
+    width:100%; border-radius:7px 7px 0 0;
+    background:linear-gradient(180deg,#a5b4fc,#6366f1); min-height:3px;
+  }
+  .mcol.on .mbar{background:linear-gradient(180deg,#818cf8,#4f46e5); box-shadow:0 2px 8px rgba(79,70,229,.3);}
+  .mcol .mbar.zero{background:#eef0f4; min-height:3px;}
+  .mcol .mlb{font-size:11px; color:var(--muted); margin-top:6px; white-space:nowrap;}
   .mcol.on .mlb{color:var(--brand); font-weight:700;}
+
+  /* 每日支出 */
+  .dchart{display:flex; align-items:flex-end; gap:2px; height:86px; padding-top:4px;}
+  .dchart .db{flex:1; min-width:2px; border-radius:2px 2px 0 0; background:linear-gradient(180deg,#a5b4fc,#6366f1); min-height:2px;}
+  .dchart .db.zero{background:#eef0f4;}
+  .dchart .db.max{background:linear-gradient(180deg,#f9a8d4,#db2777);}
+  .trend-lb{display:flex; justify-content:space-between; font-size:10.5px; color:var(--muted); margin-top:6px;}
 
   /* ---------- 设置 ---------- */
   .field{margin-bottom:11px;}
@@ -315,31 +334,38 @@
   <section id="page-stats" class="page">
     <div class="card">
       <div class="stat-nav">
-        <button class="nav-btn" id="stat-prev">‹</button>
+        <button class="nav-btn" id="stat-prev" aria-label="上个月">‹</button>
         <div class="ym" id="stat-ym">—</div>
-        <button class="nav-btn" id="stat-next">›</button>
+        <button class="nav-btn" id="stat-next" aria-label="下个月">›</button>
       </div>
-      <div class="stat-boxes">
-        <div class="stat-box ex"><div class="lb">支出</div><div class="v" id="st-ex">¥0</div></div>
-        <div class="stat-box in"><div class="lb">收入</div><div class="v" id="st-in">¥0</div></div>
-        <div class="stat-box bal"><div class="lb">结余</div><div class="v" id="st-bal">¥0</div></div>
+      <div class="sum-main">
+        <div class="sum-lb">本月支出</div>
+        <div class="sum-v" id="st-ex">¥0.00</div>
+        <div class="sum-sub" id="st-sub">—</div>
+      </div>
+      <div class="sum-split">
+        <div class="sum-item"><span class="si-lb">收入</span><span class="si-v in" id="st-in">¥0.00</span></div>
+        <div class="sum-item"><span class="si-lb">结余</span><span class="si-v bal" id="st-bal">¥0.00</span></div>
+        <div class="sum-item"><span class="si-lb">笔数</span><span class="si-v" id="st-cnt">0</span></div>
       </div>
     </div>
+
     <div class="card">
       <div class="card-head"><div class="card-title">分类占比</div><span class="chip" id="cat-cnt">0 笔</span></div>
       <div id="pie-body"></div>
       <div id="cat-legend"></div>
     </div>
+
     <div class="card">
-      <div class="card-head"><div class="card-title">每月收支</div><span class="chip">近 6 个月</span></div>
-      <div class="card-sub">点一列柱子可以跳到那个月</div>
-      <div class="mbars" id="mbars"></div>
-      <div class="legend-row" style="border:none;padding-top:8px;"><span class="legend-dot" style="background:#4f46e5"></span><span>支出</span><span class="legend-dot" style="background:#16a34a;margin-left:12px"></span><span>收入</span></div>
+      <div class="card-head"><div class="card-title">每月支出</div><span class="chip">近 6 个月</span></div>
+      <div class="card-sub">点一列跳到那个月；绿色数字是该月收入</div>
+      <div class="mchart" id="mbars"></div>
     </div>
+
     <div class="card">
       <div class="card-head"><div class="card-title">每日支出</div><span class="chip" id="trend-max">—</span></div>
-      <div class="trend" id="trend"></div>
-      <div class="trend-lb"><span id="trend-l">1</span><span id="trend-r">31</span></div>
+      <div class="dchart" id="trend"></div>
+      <div class="trend-lb"><span id="trend-l">1 日</span><span id="trend-r">31 日</span></div>
     </div>
   </section>
 
@@ -398,7 +424,7 @@
     </div>
 
     <div class="card green">
-      <div class="card-head"><div class="card-title">数据</div><span class="chip">v1.4</span></div>
+      <div class="card-head"><div class="card-title">数据</div><span class="chip">v1.7</span></div>
       <div class="card-sub">数据在本机浏览器 + 你的 GitHub 仓库，完全归你所有。懒人记账 · 纯前端离线 PWA。</div>
       <div class="note">云端若有分类写坏的旧记录（日期串/整段列表），同步时会自动修正并推回仓库，无需手动处理。</div>
       <div class="btn-row">
@@ -609,6 +635,14 @@ function parseTs(s){
 function money(n){
   n = Number(n) || 0;
   return '¥' + (Math.round(n * 100) / 100).toFixed(2);
+}
+/* 紧凑金额，用于柱状图顶部标签：¥800.00 -> 800，¥1250 -> 1.2k */
+function moneyShort(n){
+  n = Number(n) || 0;
+  if(n >= 10000) return (n / 10000).toFixed(n % 10000 === 0 ? 0 : 1) + 'w';
+  if(n >= 1000) return (n / 1000).toFixed(n % 1000 === 0 ? 0 : 1) + 'k';
+  if(n >= 100) return String(Math.round(n));
+  return (Math.round(n * 10) / 10).toString();
 }
 function weekCn(ts){
   return '周' + '日一二三四五六'.charAt(new Date(ts).getDay());
@@ -1026,7 +1060,7 @@ function renderList(){
 var statYm = (function(){ var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth()+1); })();
 function renderStats(){
   $('stat-ym').textContent = statYm.replace('-', '年') + '月';
-  var ex = 0, inc = 0, cnt = 0;
+  var ex = 0, inc = 0, cnt = 0, exCnt = 0;
   var catSum = {};
   for(var id in S.records){
     var r = S.records[id];
@@ -1034,12 +1068,28 @@ function renderStats(){
     if(ymdStr(r.ts).slice(0,7) !== statYm) continue;
     cnt++;
     if(r.type === 'income') inc += r.amount;
-    else { ex += r.amount; catSum[r.category] = (catSum[r.category] || 0) + r.amount; }
+    else { ex += r.amount; exCnt++; catSum[r.category] = (catSum[r.category] || 0) + r.amount; }
   }
   $('st-ex').textContent = money(ex);
   $('st-in').textContent = money(inc);
   $('st-bal').textContent = money(inc - ex);
+  $('st-cnt').textContent = exCnt + ' 笔';
   $('cat-cnt').textContent = cnt + ' 笔';
+
+  // 副标题：日均 + 环比上月
+  var y = Number(statYm.slice(0,4)), mo = Number(statYm.slice(5,7));
+  var days = new Date(y, mo, 0).getDate();
+  var isThisMonth = (function(){ var d = new Date(); return d.getFullYear() === y && d.getMonth()+1 === mo; })();
+  var elapsed = isThisMonth ? new Date().getDate() : days;
+  var sub = exCnt ? ('日均 ' + money(ex / Math.max(1, elapsed)) + ' · 共 ' + exCnt + ' 笔') : '本月还没有支出记录';
+  var pm = mo === 1 ? (y-1) + '-12' : y + '-' + pad(mo-1);
+  var prevEx = monthSum(pm).ex;
+  if(prevEx > 0 && ex > 0){
+    var diff = ex - prevEx;
+    var pct = Math.round(Math.abs(diff) / prevEx * 100);
+    sub += ' · 比上月' + (diff >= 0 ? '<span class="up">多 ' + pct + '%</span>' : '<span class="down">少 ' + pct + '%</span>');
+  }
+  $('st-sub').innerHTML = sub;
 
   var arr = [];
   for(var c in catSum) arr.push([c, catSum[c]]);
@@ -1047,9 +1097,7 @@ function renderStats(){
   renderPie(arr, ex, cnt);
   renderMonthly();
 
-  // 每日支出柱状
-  var y = Number(statYm.slice(0,4)), mo = Number(statYm.slice(5,7));
-  var days = new Date(y, mo, 0).getDate();
+  // 每日支出
   var daily = [], max = 0;
   for(var i = 0; i < days; i++) daily.push(0);
   for(var id2 in S.records){
@@ -1061,14 +1109,16 @@ function renderStats(){
     if(daily[dd] > max) max = daily[dd];
   }
   var tb = '';
-  daily.forEach(function(v){
-    var h = max ? Math.max(3, Math.round(v / max * 66)) : 3;
-    tb += '<div class="tb" style="height:' + (v ? h : 2) + 'px; opacity:' + (v ? 1 : .25) + '"></div>';
+  daily.forEach(function(v, idx){
+    var h = max ? Math.max(3, Math.round(v / max * 74)) : 3;
+    var cls = 'db' + (v ? '' : ' zero') + (max && v === max ? ' max' : '');
+    var title = (idx + 1) + '日 ' + (v ? money(v) : '无支出');
+    tb += '<div class="' + cls + '" style="height:' + (v ? h : 3) + 'px" title="' + esc(title) + '"></div>';
   });
   $('trend').innerHTML = tb;
-  $('trend-max').textContent = max ? '单日最高 ' + money(max) : '—';
-  $('trend-l').textContent = '1';
-  $('trend-r').textContent = days;
+  $('trend-max').textContent = max ? '最高 ' + money(max) : '—';
+  $('trend-l').textContent = '1 日';
+  $('trend-r').textContent = days + ' 日';
 }
 
 /* ============ 渲染：饼图 + 每月收支 ============ */
@@ -1093,11 +1143,21 @@ function renderPie(arr, ex, cnt){
     + '<text x="60" y="57" text-anchor="middle" class="pie-num">' + esc(money(ex)) + '</text>'
     + '<text x="60" y="72" text-anchor="middle" class="pie-lb">总支出</text></svg>';
   var html = '';
+  var maxV = arr[0] ? arr[0][1] : 0;
+  var html = '';
   arr.forEach(function(it, i){
     var pct = ex ? Math.round(it[1] / ex * 100) : 0;
-    html += '<div class="legend-row"><span class="legend-dot" style="background:' + PALETTE[i % PALETTE.length] + '"></span>'
-      + '<span class="le-emoji">' + catEmoji(it[0]) + '</span><span class="le-name">' + esc(it[0]) + '</span>'
-      + '<span class="le-pct">' + pct + '%</span><span class="le-amt"><b>' + esc(money(it[1])) + '</b></span></div>';
+    var w = maxV ? Math.round(it[1] / maxV * 100) : 0;
+    var col = PALETTE[i % PALETTE.length];
+    html += '<div class="legend-row">'
+      + '<span class="le-emoji">' + catEmoji(it[0]) + '</span>'
+      + '<div class="le-mid">'
+      +   '<div class="le-top"><span class="le-name">' + esc(it[0]) + '</span>'
+      +   '<span class="le-amt">' + esc(money(it[1])) + '</span></div>'
+      +   '<div class="le-bar"><i style="width:' + w + '%;background:' + col + '"></i></div>'
+      + '</div>'
+      + '<span class="le-pct">' + pct + '%</span>'
+      + '</div>';
   });
   lg.innerHTML = html;
 }
@@ -1111,23 +1171,24 @@ function monthSum(ym){
   }
   return { ex: ex, inc: inc };
 }
+/* 近 6 个月支出柱；有收入的月份在柱顶标一个绿色小数字 */
 function renderMonthly(){
   var list = [], y = Number(statYm.slice(0, 4)), m = Number(statYm.slice(5, 7));
   for(var i = 0; i < 6; i++){ list.unshift(y + '-' + pad(m)); m--; if(m < 1){ m = 12; y--; } }
   var max = 0, sums = {};
   list.forEach(function(ym){
     var s = monthSum(ym); sums[ym] = s;
-    max = Math.max(max, s.ex, s.inc);
+    if(s.ex > max) max = s.ex;
   });
   var html = '';
   list.forEach(function(ym){
     var s = sums[ym];
-    var hex = Math.max(4, Math.round(s.ex / max * 66));
-    var hin = Math.max(4, Math.round(s.inc / max * 66));
-    html += '<div class="mcol' + (ym === statYm ? ' on' : '') + '" data-ym="' + ym + '">'
-      + '<div class="mval">' + (s.ex ? esc(money(s.ex)) : '&nbsp;') + '</div>'
-      + '<div class="mbar"><i class="in" style="height:' + hin + 'px"></i><i class="ex" style="height:' + hex + 'px"></i></div>'
-      + '<div class="mlb">' + Number(ym.slice(5, 7)) + '月</div></div>';
+    var h = s.ex && max ? Math.max(6, Math.round(s.ex / max * 96)) : 3;
+    html += '<div class="mcol' + (ym === statYm ? ' on' : '') + '" data-ym="' + ym + '" title="' + ym + ' 支出 ' + money(s.ex) + (s.inc ? ' · 收入 ' + money(s.inc) : '') + '">'
+      + '<span class="mval">' + (s.ex ? esc(moneyShort(s.ex)) : '') + '</span>'
+      + (s.inc ? '<span class="mflag">+' + esc(moneyShort(s.inc)) + '</span>' : '')
+      + '<span class="mbar' + (s.ex ? '' : ' zero') + '" style="height:' + h + 'px"></span>'
+      + '<span class="mlb">' + Number(ym.slice(5, 7)) + '月</span></div>';
   });
   var mb = $('mbars');
   mb.innerHTML = html;
