@@ -99,6 +99,14 @@
     max-width:660px; width:100%; margin:0 auto;
     padding:14px;
   }
+  /* 对话页：整页不滚动，只有卡片流滚 —— 蓝色卡片和输入栏固定在上面 */
+  #page-chat.active{
+    display:flex; flex-direction:column;
+    height:100%;
+  }
+  #page-chat .chat-hero{flex:none;}
+  #page-chat .composer{flex:none;}
+  #page-chat #chatFeed{flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;}
   .page{display:none;}
   .page.active{display:block;}
 
@@ -156,12 +164,13 @@
   }
   .quick:active{transform:translate(2px,2px); box-shadow:1px 1px 0 var(--ink);}
 
-  /* 记账输入区：三段布局的第三段（在任务栏之上），永远可见 */
+  /* 记账输入区：贴在蓝色卡片下方，固定不动（不参与滚动） */
   .composer{
     flex:none;
     background:var(--paper);
-    border-top:var(--bd);
-    padding:10px 14px;
+    border:var(--bd); box-shadow:var(--sh);
+    padding:12px;
+    margin-bottom:16px;
   }
   .composer-btns{display:flex; gap:10px; margin-bottom:10px;}
   .cbtn{
@@ -414,6 +423,19 @@
       <div class="hero-dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
     </div>
 
+    <!-- 输入区：紧贴在蓝色「今日支出」卡片下方，固定不动 -->
+    <div class="composer">
+      <div class="composer-btns">
+        <button class="cbtn on-ex" id="btnQuickEx">支出 －</button>
+        <button class="cbtn" id="btnQuickIn">收入 ＋</button>
+      </div>
+      <div class="input-row">
+        <input id="chatInput" placeholder="记一笔… 例如「今天午饭花了15块」" autocomplete="off">
+        <button class="send-btn" id="chatSend">↑</button>
+      </div>
+    </div>
+
+    <!-- 记录卡片流：只有这块滚动 -->
     <div id="chatFeed"></div>
   </section>
 
@@ -544,7 +566,7 @@
       <div class="feat" data-act="about">
         <div class="ic" style="background:var(--pink);">ℹ️</div>
         <div class="n">关于</div>
-        <div class="d" id="featVer">v3.2.0</div>
+        <div class="d" id="featVer">v3.3.0</div>
       </div>
       <div class="feat" data-act="share">
         <div class="ic" style="background:var(--green);">🎁</div>
@@ -556,18 +578,6 @@
     <div class="foot-note" id="meFoot">数据存在本机 + 你自己的 GitHub 仓库。</div>
   </section>
 </main>
-
-<!-- 输入区：三段布局的第三段，只在对话页显示 -->
-<div class="composer" id="composer">
-  <div class="composer-btns">
-    <button class="cbtn on-ex" id="btnQuickEx">支出 －</button>
-    <button class="cbtn" id="btnQuickIn">收入 ＋</button>
-  </div>
-  <div class="input-row">
-    <input id="chatInput" placeholder="记一笔… 例如「今天午饭花了15块」" autocomplete="off">
-    <button class="send-btn" id="chatSend">↑</button>
-  </div>
-</div>
 
 <nav class="tabbar">
   <button class="tab on" data-page="chat"><span class="ti">💬</span>对话</button>
@@ -1065,11 +1075,11 @@ function showPage(name){
   var showNav = (name==='list' || name==='stats');
   $('pgNav').style.display = showNav ? 'flex' : 'none';
   $('pgChip').style.display = showNav ? 'none' : 'block';
-  // 输入区只在对话页出现
-  $('composer').style.display = (name==='chat') ? 'block' : 'none';
   renderAll();
   var m = document.querySelector('main');
   if(m) m.scrollTop = 0;
+  var f = document.getElementById('chatFeed');
+  if(f) f.scrollTop = 0;
 }
 
 /* ================= 渲染：对话 ================= */
