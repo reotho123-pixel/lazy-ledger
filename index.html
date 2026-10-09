@@ -36,19 +36,18 @@
     --tabbar-h:64px;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
-  html{-webkit-text-size-adjust:100%; overflow-anchor:none;}
-  /* 三段式布局：标题 / 内容区（独立滚动）/ 输入栏 + 任务栏（固定底部）
-     不用 position:fixed —— iOS Safari 的底部工具栏会改变视口高度，fixed 会错位 */
-  html,body{height:100%;}
+  html{-webkit-text-size-adjust:100%; overflow-anchor:none; height:100%; overflow:hidden;}
+  /* 三段式布局：标题 / 内容区（独立滚动）/ 输入栏 / 任务栏
+     用 position:fixed + inset:0 精确铺满真实视口 ——
+     iOS 独立 App 下 100dvh/100vh 会比真实屏幕小，会导致底部留空、任务栏悬空 */
   body{
+    position:fixed; inset:0;
     margin:0; background:var(--paper); color:var(--ink);
     /* 字体方案②：等宽收据风 —— 数字对齐，中文回退到苹方 */
     font-family:ui-monospace,"SF Mono",Menlo,Consolas,"PingFang SC","Heiti SC",monospace;
     line-height:1.45;
     font-weight:800;
     display:flex; flex-direction:column;
-    height:100vh;
-    height:100dvh;
     overflow:hidden;
     overflow-anchor:none;
   }
@@ -566,7 +565,7 @@
       <div class="feat" data-act="about">
         <div class="ic" style="background:var(--pink);">ℹ️</div>
         <div class="n">关于</div>
-        <div class="d" id="featVer">v3.3.0</div>
+        <div class="d" id="featVer">v3.4.0</div>
       </div>
       <div class="feat" data-act="share">
         <div class="ic" style="background:var(--green);">🎁</div>
