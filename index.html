@@ -36,13 +36,14 @@
     --tabbar-h:64px;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
-  html{-webkit-text-size-adjust:100%;}
+  html{-webkit-text-size-adjust:100%; overflow-anchor:none;}
   body{
     margin:0; background:var(--paper); color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
     line-height:1.45;
     padding-bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 20px);
     font-weight:600;
+    overflow-anchor:none;
   }
   button{font-family:inherit; font-weight:800; color:var(--ink); cursor:pointer;}
   input,select,textarea{font-family:inherit; font-weight:700; color:var(--ink);}
@@ -121,6 +122,13 @@
   .chip-tag.in{background:var(--green);}
   .cc-rule{height:3px; background:var(--ink); margin:12px 0;}
   .cc-foot{display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:15px; font-weight:900;}
+  .cc-edit,.cc-del{
+    border:var(--bd); box-shadow:2px 2px 0 var(--ink); background:var(--paper2);
+    padding:5px 12px; font-size:13px; font-weight:900;
+  }
+  .cc-edit:active,.cc-del:active{transform:translate(1px,1px); box-shadow:1px 1px 0 var(--ink);}
+  .cc-del{background:var(--red);}
+  .chat-card{cursor:pointer;}
 
   .quick-row{display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px;}
   .quick{
@@ -128,6 +136,22 @@
     padding:9px 14px; font-size:14px; font-weight:900;
   }
   .quick:active{transform:translate(2px,2px); box-shadow:1px 1px 0 var(--ink);}
+
+  /* 记账输入区：常驻在页面底部（不随卡片流滚动） */
+  .composer{
+    position:sticky; bottom:0; z-index:20;
+    margin:0 -14px; padding:10px 14px 12px;
+    background:var(--paper);
+    border-top:var(--bd);
+  }
+  .composer-btns{display:flex; gap:10px; margin-bottom:10px;}
+  .cbtn{
+    flex:1; border:var(--bd); box-shadow:var(--sh-sm); background:var(--paper2);
+    padding:11px; font-size:15px; font-weight:900;
+  }
+  .cbtn:active{transform:translate(2px,2px); box-shadow:1px 1px 0 var(--ink);}
+  .cbtn.on-ex{background:var(--red);}
+  .cbtn.on-in{background:var(--green);}
 
   .input-row{display:flex; gap:10px; align-items:stretch;}
   .input-row input{
@@ -373,11 +397,16 @@
 
     <div id="chatFeed"></div>
 
-    <div class="quick-row" id="quickRow"></div>
-
-    <div class="input-row">
-      <input id="chatInput" placeholder="记一笔… 例如「今天午饭花了15块」" autocomplete="off">
-      <button class="send-btn" id="chatSend">↑</button>
+    <!-- 输入区：常驻在卡片流下方，不随内容滚动被顶走 -->
+    <div class="composer">
+      <div class="composer-btns">
+        <button class="cbtn on-ex" id="btnQuickEx">支出 －</button>
+        <button class="cbtn" id="btnQuickIn">收入 ＋</button>
+      </div>
+      <div class="input-row">
+        <input id="chatInput" placeholder="记一笔… 例如「今天午饭花了15块」" autocomplete="off">
+        <button class="send-btn" id="chatSend">↑</button>
+      </div>
     </div>
   </section>
 
@@ -1013,8 +1042,12 @@ function showPage(name){
   });
   $('pgTitle').textContent = PAGE_META[name].title;
   $('pgDot').style.background = PAGE_META[name].dot;
-  window.scrollTo(0,0);
+  // 账本 / 统计 显示月份切换，对话 / 我的 显示计数
+  var showNav = (name==='list' || name==='stats');
+  $('pgNav').style.display = showNav ? 'flex' : 'none';
+  $('pgChip').style.display = showNav ? 'none' : 'block';
   renderAll();
+  window.scrollTo(0,0);
 }
 
 /* ================= 渲染：对话 ================= */
@@ -1045,10 +1078,10 @@ function renderChat(){
       + '<div class="t" style="font-weight:700;color:#5a5344;margin-top:6px;">在下面输入「今天午饭花了15块」试试</div></div>';
   } else {
     var html = '';
-    recs.slice(0,12).forEach(function(r){
+    recs.slice(0,20).forEach(function(r){
       var isIn = r.type==='income';
       var bg = catColor(r.category);
-      html += '<div class="chat-card">'
+      html += '<div class="chat-card" data-id="'+esc(r.id)+'">'
         + '<div class="cc-top">'
         +   '<div class="cc-emoji" style="background:'+bg+';">'+catEmoji(r.category)+'</div>'
         +   '<div class="cc-mid">'
@@ -1060,24 +1093,34 @@ function renderChat(){
         + '<div class="cc-amt'+(isIn?' in':'')+'">'+(isIn?'+':'-')+'¥'+num(r.amount)+'</div>'
         + '<div class="cc-rule"></div>'
         + '<div class="cc-foot"><span>✓ 已记入账本</span>'
-        +   '<span class="badge'+(r.auto?'':' y')+'">'+(r.auto?'自动分类':'手动')+'</span></div>'
+        +   '<span style="display:flex;align-items:center;gap:8px;">'
+        +     '<span class="badge'+(r.auto?'':' y')+'">'+(r.auto?'自动分类':'手动')+'</span>'
+        +     '<button class="cc-edit" data-edit="'+esc(r.id)+'">改</button>'
+        +     '<button class="cc-del" data-del="'+esc(r.id)+'">删</button>'
+        +   '</span></div>'
         + '</div>';
     });
     feed.innerHTML = html;
-  }
-
-  // 快捷记账（最近常记的两类）
-  var quick = $('quickRow');
-  var qs = ['话费 200','物业费 150','午饭 15','打车 20'];
-  quick.innerHTML = qs.map(function(t){
-    return '<button class="quick" data-q="'+esc(t)+'">'+esc(t)+'</button>';
-  }).join('');
-  Array.prototype.forEach.call(quick.querySelectorAll('.quick'), function(b){
-    b.addEventListener('click', function(){
-      $('chatInput').value = b.getAttribute('data-q');
-      $('chatInput').focus();
+    // 点卡片本身 → 编辑
+    Array.prototype.forEach.call(feed.querySelectorAll('.chat-card'), function(el){
+      el.addEventListener('click', function(e){
+        if(e.target.closest('[data-del]')) return;
+        openSheet(el.getAttribute('data-id'));
+      });
     });
-  });
+    Array.prototype.forEach.call(feed.querySelectorAll('[data-edit]'), function(b){
+      b.addEventListener('click', function(e){
+        e.stopPropagation();
+        openSheet(b.getAttribute('data-edit'));
+      });
+    });
+    Array.prototype.forEach.call(feed.querySelectorAll('[data-del]'), function(b){
+      b.addEventListener('click', function(e){
+        e.stopPropagation();
+        delRecordById(b.getAttribute('data-del'));
+      });
+    });
+  }
 }
 function relTime(r){
   if(!r.ts) return r.time||'时间未知';
@@ -1110,7 +1153,6 @@ function renderList(){
   $('listAmt').textContent = money(s.ex);
   $('listCnt').textContent = s.cnt+' 笔';
   $('listBal').textContent = '结余 '+(s.inc-s.ex).toFixed(2);
-  $('pgChip').textContent = '共 '+s.cnt+' 笔';
 
   var recs = [];
   for(var id in S.records){
@@ -1167,7 +1209,7 @@ function renderList(){
 var statYm = (function(){ var d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1); })();
 function renderStats(){
   var ym = statYm;
-  $('pgChip').textContent = ym.replace('-','年')+'月';
+  $('mLabel').textContent = ym.replace('-','年')+'月';
   var ex=0, inc=0, cnt=0, exCnt=0, catSum={}, days=new Set();
   var y=Number(ym.slice(0,4)), mo=Number(ym.slice(5,7));
   for(var id in S.records){
@@ -1409,12 +1451,20 @@ function saveSheet(){
 }
 function delRecord(){
   if(!editingId) return;
-  var id = editingId;
-  if(!confirm('确定删除这笔记录吗？'+(S.known['data/'+id+'.json']?'（云端也会删除）':''))) return;
+  delRecordById(editingId, true);
+}
+/* 按 id 删除（对话卡片和编辑弹层共用） */
+function delRecordById(id, fromSheet){
+  if(!id) return;
+  var r = S.records[id];
+  if(!r){ return; }
+  if(!confirm('确定删除这笔「'+r.category+' ¥'+num(r.amount)+'」吗？'+(S.known['data/'+id+'.json']?'（云端也会删除）':''))) return;
   var path = 'data/'+id+'.json';
   if(S.known[path]) S.delQ.push({ path:path, sha:S.known[path].sha });
   delete S.records[id]; delete S.pending[id];
-  persist(); closeSheet(); renderAll();
+  persist();
+  if(fromSheet) closeSheet();
+  renderAll();
   toast('已删除');
   if(isCfgOk() && navigator.onLine) sync(false);
 }
@@ -1444,12 +1494,29 @@ function parseChat(text){
               .trim();
   return { amount:amt, type:isIncome?'income':'expense', category:hit, note:note };
 }
+var chatType = 'expense';   // 对话页的支出/收入开关
+function setChatType(t){
+  chatType = t;
+  $('btnQuickEx').className = 'cbtn' + (t==='expense' ? ' on-ex' : '');
+  $('btnQuickIn').className = 'cbtn' + (t==='income' ? ' on-in' : '');
+  $('chatInput').placeholder = t==='income'
+    ? '记一笔收入… 例如「收到红包 100」'
+    : '记一笔… 例如「今天午饭花了15块」';
+}
 function sendChat(){
   var inp = $('chatInput');
   var txt = String(inp.value||'').trim();
   if(!txt){ toast('说点什么…'); return; }
   var p = parseChat(txt);
   if(!p){ toast('没识别出金额，试试「午饭 15」'); return; }
+  // 输入框里明确说了方向就听文本的，否则用当前开关
+  var explicit = /(收入|收到|赚|发了|报销|退款|退了|进账|工资|奖金)/.test(txt);
+  if(!explicit) p.type = chatType;
+  // 如果分类和方向不匹配，按方向重判
+  var list = (p.type==='income') ? incomeCats() : expenseCats();
+  if(!list.some(function(c){ return c.name===p.category; })){
+    p.category = autoCat(txt, p.type) || (p.type==='income' ? '其他收入' : '其他');
+  }
   var d = new Date();
   var rec = {
     id:newId(), type:p.type, amount:p.amount, category:p.category,
@@ -1832,18 +1899,22 @@ function bind(){
       }
     });
   });
-  $('mPrev').onclick = function(){
-    var y=Number(listYm.slice(0,4)), m=Number(listYm.slice(5,7))-1;
+  // 月份切换：账本页改 listYm，统计页改 statYm
+  function shiftMonth(delta){
+    var cur = (curPage==='stats') ? statYm : listYm;
+    var y = Number(cur.slice(0,4)), m = Number(cur.slice(5,7)) + delta;
     if(m<1){ m=12; y--; }
-    listYm = y+'-'+pad(m); renderList();
-  };
-  $('mNext').onclick = function(){
-    var y=Number(listYm.slice(0,4)), m=Number(listYm.slice(5,7))+1;
     if(m>12){ m=1; y++; }
-    listYm = y+'-'+pad(m); renderList();
-  };
+    var next = y+'-'+pad(m);
+    if(curPage==='stats'){ statYm = next; renderStats(); }
+    else { listYm = next; renderList(); }
+  }
+  $('mPrev').onclick = function(){ shiftMonth(-1); };
+  $('mNext').onclick = function(){ shiftMonth(1); };
   $('chatSend').onclick = sendChat;
   $('chatInput').onkeydown = function(e){ if(e.key==='Enter'){ e.preventDefault(); sendChat(); } };
+  $('btnQuickEx').onclick = function(){ setChatType('expense'); };
+  $('btnQuickIn').onclick = function(){ setChatType('income'); };
   $('btnSetBudget').onclick = openBudget;
   $('mask').addEventListener('click', function(e){ if(e.target===$('mask')) closeSheet(); });
   window.addEventListener('online', function(){ sync(false); });
@@ -1864,6 +1935,7 @@ function exportJson(){
 /* ================= 启动 ================= */
 load();
 bind();
+setChatType('expense');
 showPage('chat');
 renderAll();
 setInterval(function(){
