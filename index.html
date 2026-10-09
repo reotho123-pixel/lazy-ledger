@@ -37,13 +37,26 @@
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html{-webkit-text-size-adjust:100%; overflow-anchor:none;}
+  /* 三段式布局：标题 / 内容区（独立滚动）/ 输入栏 + 任务栏（固定底部）
+     不用 position:fixed —— iOS Safari 的底部工具栏会改变视口高度，fixed 会错位 */
+  html,body{height:100%;}
   body{
     margin:0; background:var(--paper); color:var(--ink);
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    /* 字体方案②：等宽收据风 —— 数字对齐，中文回退到苹方 */
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,"PingFang SC","Heiti SC",monospace;
     line-height:1.45;
-    padding-bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 20px);
-    font-weight:600;
+    font-weight:800;
+    display:flex; flex-direction:column;
+    height:100vh;
+    height:100dvh;
+    overflow:hidden;
     overflow-anchor:none;
+  }
+  /* 金额 / 统计数字：等宽对齐 + 紧字距 */
+  .big-amt,.cc-amt,.rec-amt,.sum-card .amt,.st-hero .big,.cell .v,
+  .hero-split .it .v,.sum-main .sum-v,.mcol .v,.le-amt,.cat-top .amt,.bud-foot{
+    font-variant-numeric:tabular-nums;
+    letter-spacing:-1px;
   }
   button{font-family:inherit; font-weight:800; color:var(--ink); cursor:pointer;}
   input,select,textarea{font-family:inherit; font-weight:700; color:var(--ink);}
@@ -52,9 +65,9 @@
   .box{background:var(--paper2); border:var(--bd); box-shadow:var(--sh);}
   .pad{padding:14px;}
 
-  /* ---------- 顶栏 ---------- */
+  /* ---------- 顶栏（三段布局的第一段） ---------- */
   header{
-    position:sticky; top:0; z-index:35;
+    flex:none; z-index:35;
     background:var(--paper);
     padding:calc(10px + env(safe-area-inset-top)) 14px 10px;
     display:flex; align-items:center; gap:10px;
@@ -79,7 +92,13 @@
   }
   .pg-nav .ym{font-size:15px; font-weight:900; white-space:nowrap; padding:0 2px;}
 
-  main{max-width:660px; margin:0 auto; padding:14px;}
+  /* 内容区：三段布局的第二段，独立滚动 */
+  main{
+    flex:1 1 auto; min-height:0;
+    overflow-y:auto; -webkit-overflow-scrolling:touch;
+    max-width:660px; width:100%; margin:0 auto;
+    padding:14px;
+  }
   .page{display:none;}
   .page.active{display:block;}
 
@@ -137,12 +156,12 @@
   }
   .quick:active{transform:translate(2px,2px); box-shadow:1px 1px 0 var(--ink);}
 
-  /* 记账输入区：常驻在页面底部（不随卡片流滚动） */
+  /* 记账输入区：三段布局的第三段（在任务栏之上），永远可见 */
   .composer{
-    position:sticky; bottom:0; z-index:20;
-    margin:0 -14px; padding:10px 14px 12px;
+    flex:none;
     background:var(--paper);
     border-top:var(--bd);
+    padding:10px 14px;
   }
   .composer-btns{display:flex; gap:10px; margin-bottom:10px;}
   .cbtn{
@@ -257,7 +276,7 @@
 
   /* ---------- 底栏 ---------- */
   nav.tabbar{
-    position:fixed; left:0; right:0; bottom:0; z-index:40;
+    flex:none; z-index:40;
     background:var(--paper); border-top:var(--bd);
     padding:8px 8px calc(8px + env(safe-area-inset-bottom));
     display:flex; gap:6px;
@@ -396,18 +415,6 @@
     </div>
 
     <div id="chatFeed"></div>
-
-    <!-- 输入区：常驻在卡片流下方，不随内容滚动被顶走 -->
-    <div class="composer">
-      <div class="composer-btns">
-        <button class="cbtn on-ex" id="btnQuickEx">支出 －</button>
-        <button class="cbtn" id="btnQuickIn">收入 ＋</button>
-      </div>
-      <div class="input-row">
-        <input id="chatInput" placeholder="记一笔… 例如「今天午饭花了15块」" autocomplete="off">
-        <button class="send-btn" id="chatSend">↑</button>
-      </div>
-    </div>
   </section>
 
   <!-- ============ 账本 ============ -->
@@ -537,7 +544,7 @@
       <div class="feat" data-act="about">
         <div class="ic" style="background:var(--pink);">ℹ️</div>
         <div class="n">关于</div>
-        <div class="d" id="featVer">v3.0.0</div>
+        <div class="d" id="featVer">v3.2.0</div>
       </div>
       <div class="feat" data-act="share">
         <div class="ic" style="background:var(--green);">🎁</div>
@@ -549,6 +556,18 @@
     <div class="foot-note" id="meFoot">数据存在本机 + 你自己的 GitHub 仓库。</div>
   </section>
 </main>
+
+<!-- 输入区：三段布局的第三段，只在对话页显示 -->
+<div class="composer" id="composer">
+  <div class="composer-btns">
+    <button class="cbtn on-ex" id="btnQuickEx">支出 －</button>
+    <button class="cbtn" id="btnQuickIn">收入 ＋</button>
+  </div>
+  <div class="input-row">
+    <input id="chatInput" placeholder="记一笔… 例如「今天午饭花了15块」" autocomplete="off">
+    <button class="send-btn" id="chatSend">↑</button>
+  </div>
+</div>
 
 <nav class="tabbar">
   <button class="tab on" data-page="chat"><span class="ti">💬</span>对话</button>
@@ -1046,8 +1065,11 @@ function showPage(name){
   var showNav = (name==='list' || name==='stats');
   $('pgNav').style.display = showNav ? 'flex' : 'none';
   $('pgChip').style.display = showNav ? 'none' : 'block';
+  // 输入区只在对话页出现
+  $('composer').style.display = (name==='chat') ? 'block' : 'none';
   renderAll();
-  window.scrollTo(0,0);
+  var m = document.querySelector('main');
+  if(m) m.scrollTop = 0;
 }
 
 /* ================= 渲染：对话 ================= */
