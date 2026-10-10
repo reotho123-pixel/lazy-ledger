@@ -8,7 +8,7 @@
  * Pages use network-first because cache-first makes users stay on stale versions,
  * especially on iOS home-screen apps where the SW update check rarely fires.
  */
-var CACHE = 'lazy-ledger-v29';
+var CACHE = 'lazy-ledger-v30';
 var ASSETS = [
   './',
   './index.html',

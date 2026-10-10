@@ -100,17 +100,26 @@
     overflow-y:auto; -webkit-overflow-scrolling:touch;
     max-width:660px; width:100%; margin:0 auto;
     padding:14px;
+    position:relative;
   }
-  /* 对话页：整页不滚动，只有卡片流滚 —— 蓝色卡片和输入栏固定在上面 */
+  /* 对话页：绝对定位铺满内容区 —— 高度由 inset 决定，
+     不依赖 100% / 100vh / 100dvh（这些在 iOS 独立 App 下都不可靠） */
   #page-chat.active{
+    position:absolute;
+    top:14px; left:14px; right:14px;
+    bottom:calc(var(--tab-h, 92px) + 6px);
     display:flex; flex-direction:column;
-    height:100%;
+    overflow:hidden;
   }
   #page-chat .chat-hero{flex:none;}
   #page-chat .composer{flex:none;}
   #page-chat #chatFeed{flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;}
   .page{display:none;}
   .page.active{display:block;}
+  /* 非对话页：底部留出任务栏高度，内容不被 Fixed 任务栏遮住 */
+  #page-list.active, #page-stats.active, #page-me.active{
+    padding-bottom:calc(var(--tab-h, 92px) + 6px);
+  }
 
   /* ---------- 对话页 ---------- */
   .chat-hero{background:var(--cyan); border:var(--bd); box-shadow:var(--sh); padding:16px; margin-bottom:16px;}
@@ -286,8 +295,10 @@
   .foot-note{font-size:12.5px; font-weight:700; color:#5a5344; padding:2px 2px 6px;}
 
   /* ---------- 底栏 ---------- */
+  /* 用 fixed 定位：iOS 独立 App 下 fixed+bottom:0 一定贴屏幕底
+     （flex 布局里的 body 高度在 iOS 上会偏小，导致任务栏悬空） */
   nav.tabbar{
-    flex:none; z-index:40;
+    position:fixed; left:0; right:0; bottom:0; z-index:40;
     background:var(--paper); border-top:var(--bd);
     padding:8px 8px calc(8px + env(safe-area-inset-bottom));
     display:flex; gap:6px;
@@ -568,7 +579,7 @@
       <div class="feat" data-act="about">
         <div class="ic" style="background:var(--pink);">ℹ️</div>
         <div class="n">关于</div>
-        <div class="d" id="featVer">v3.6.0</div>
+        <div class="d" id="featVer">v3.7.0</div>
       </div>
       <div class="feat" data-act="share">
         <div class="ic" style="background:var(--green);">🎁</div>
@@ -1916,7 +1927,7 @@ function shareApp(){
   }
 }
 /* 静默检查线上版本；有新版本就提示一下，不强制刷新 */
-var VER = 'v3.6.0';
+var VER = 'v3.7.0';
 var updateNotified = false;
 function autoCheckUpdate(){
   if(updateNotified || !navigator.onLine) return;
@@ -2025,17 +2036,22 @@ function exportJson(){
 
 /* ================= 启动 ================= */
 
-/* 精确设置应用高度：iOS 独立 App 下 CSS 的 100vh/100dvh 会偏小，
-   导致底部留空、任务栏悬空。这里直接量 window.innerHeight 写进 --app-h。
-   键盘弹出/旋转屏幕/地址栏收起都会改变 innerHeight，所以要持续同步。 */
+/* 精确设置布局尺寸
+   iOS 独立 App 下 CSS 的 100vh/100dvh 会偏小，导致底部留空、任务栏悬空。
+   - --app-h：body 高度（= window.innerHeight，键盘弹出时用 visualViewport 兜底）
+   - --tab-h：任务栏实际高度（用于给内容区留出底部空间） */
 function setAppHeight(){
   var h = window.innerHeight;
   if(!h) return;
-  // 键盘弹出时 visualViewport 会变小，用较大的那个避免布局被压扁
   if(window.visualViewport && window.visualViewport.height){
     h = Math.max(h, Math.round(window.visualViewport.height));
   }
   document.documentElement.style.setProperty('--app-h', h + 'px');
+  var tb = document.querySelector('nav.tabbar');
+  if(tb){
+    var th = Math.round(tb.getBoundingClientRect().height);
+    if(th > 0) document.documentElement.style.setProperty('--tab-h', th + 'px');
+  }
 }
 setAppHeight();
 window.addEventListener('resize', setAppHeight);
