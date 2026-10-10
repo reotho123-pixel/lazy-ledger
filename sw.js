@@ -1,14 +1,14 @@
-/* 懒人记账 - Service Worker
- * 更新了应用内容请把 CACHE 版本号 +1（v28 -> v29 ...）
+/* Lazy Ledger - Service Worker
+ * 更新应用内容后请把 CACHE 版本号 +1（v29 -> v30 ...）
  *
- * 策略：
- *   - index.html / 页面导航 = 网络优先（联网时永远拿最新的，离线才回退缓存）
- *   - 图标等静态资源     = 缓存优先（很少变，省流量）
- *   - GitHub API / raw   = 直接走网络，绝不缓存
- * 之所以页面用「网络优先」：cache-first 会让用户一直看到旧版，
- * 尤其 iOS 加到主屏幕后很少触发 SW 更新检查。
+ * Strategy:
+ *   - index.html / page navigations = network-first (always latest online, cache offline)
+ *   - icons and static assets       = cache-first (rarely change)
+ *   - GitHub API / raw content      = network only, never cached
+ * Pages use network-first because cache-first makes users stay on stale versions,
+ * especially on iOS home-screen apps where the SW update check rarely fires.
  */
-var CACHE = 'lazy-ledger-v28';
+var CACHE = 'lazy-ledger-v29';
 var ASSETS = [
   './',
   './index.html',
@@ -21,7 +21,6 @@ var ASSETS = [
 self.addEventListener('install', function (e) {
   e.waitUntil(
     caches.open(CACHE).then(function (c) {
-      // 逐个 add，单个失败不影响整体
       return Promise.all(ASSETS.map(function (u) {
         return c.add(u).catch(function () {});
       }));
@@ -48,10 +47,8 @@ function isDocRequest(req, url) {
 self.addEventListener('fetch', function (e) {
   if (e.request.method !== 'GET') return;
   var url = new URL(e.request.url);
-  // GitHub API / raw 内容永远走网络，不缓存
   if (url.hostname === 'api.github.com' || url.hostname === 'raw.githubusercontent.com') return;
 
-  // 页面：网络优先，离线回退缓存
   if (isDocRequest(e.request, url)) {
     e.respondWith(
       fetch(e.request).then(function (res) {
@@ -69,7 +66,6 @@ self.addEventListener('fetch', function (e) {
     return;
   }
 
-  // 其他静态资源：缓存优先，后台顺带刷新
   e.respondWith(
     caches.match(e.request, { ignoreSearch: true }).then(function (hit) {
       var net = fetch(e.request).then(function (res) {
@@ -84,7 +80,6 @@ self.addEventListener('fetch', function (e) {
   );
 });
 
-// 支持页面主动要求更新
 self.addEventListener('message', function (e) {
   if (e.data === 'skipWaiting') self.skipWaiting();
 });

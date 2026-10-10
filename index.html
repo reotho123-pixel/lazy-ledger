@@ -38,10 +38,13 @@
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html{-webkit-text-size-adjust:100%; overflow-anchor:none; height:100%; overflow:hidden;}
   /* 三段式布局：标题 / 内容区（独立滚动）/ 输入栏 / 任务栏
-     用 position:fixed + inset:0 精确铺满真实视口 ——
-     iOS 独立 App 下 100dvh/100vh 会比真实屏幕小，会导致底部留空、任务栏悬空 */
+     高度策略（按可靠性排序，JS 会覆盖成精确像素值）：
+       1) JS 读 window.innerHeight 写进 --app-h（最准，iOS 独立 App 也准）
+       2) 退回 height:100%（html 的高度 = 视口高度）
+     —— 不用 100vh/100dvh：iOS 独立 App 下会偏小导致底部留空、任务栏悬空 */
   body{
-    position:fixed; inset:0;
+    height:100%;
+    height:var(--app-h, 100%);
     margin:0; background:var(--paper); color:var(--ink);
     /* 字体方案②：等宽收据风 —— 数字对齐，中文回退到苹方 */
     font-family:ui-monospace,"SF Mono",Menlo,Consolas,"PingFang SC","Heiti SC",monospace;
@@ -565,7 +568,7 @@
       <div class="feat" data-act="about">
         <div class="ic" style="background:var(--pink);">ℹ️</div>
         <div class="n">关于</div>
-        <div class="d" id="featVer">v3.5.0</div>
+        <div class="d" id="featVer">v3.6.0</div>
       </div>
       <div class="feat" data-act="share">
         <div class="ic" style="background:var(--green);">🎁</div>
@@ -1913,7 +1916,7 @@ function shareApp(){
   }
 }
 /* 静默检查线上版本；有新版本就提示一下，不强制刷新 */
-var VER = 'v3.5.0';
+var VER = 'v3.6.0';
 var updateNotified = false;
 function autoCheckUpdate(){
   if(updateNotified || !navigator.onLine) return;
@@ -2021,6 +2024,29 @@ function exportJson(){
 }
 
 /* ================= 启动 ================= */
+
+/* 精确设置应用高度：iOS 独立 App 下 CSS 的 100vh/100dvh 会偏小，
+   导致底部留空、任务栏悬空。这里直接量 window.innerHeight 写进 --app-h。
+   键盘弹出/旋转屏幕/地址栏收起都会改变 innerHeight，所以要持续同步。 */
+function setAppHeight(){
+  var h = window.innerHeight;
+  if(!h) return;
+  // 键盘弹出时 visualViewport 会变小，用较大的那个避免布局被压扁
+  if(window.visualViewport && window.visualViewport.height){
+    h = Math.max(h, Math.round(window.visualViewport.height));
+  }
+  document.documentElement.style.setProperty('--app-h', h + 'px');
+}
+setAppHeight();
+window.addEventListener('resize', setAppHeight);
+window.addEventListener('orientationchange', function(){
+  setTimeout(setAppHeight, 120);
+  setTimeout(setAppHeight, 400);
+});
+if(window.visualViewport && window.visualViewport.addEventListener){
+  window.visualViewport.addEventListener('resize', setAppHeight);
+}
+
 load();
 bind();
 setChatType('expense');
@@ -2034,6 +2060,17 @@ setTimeout(function(){ if(S.cfg.auto && isCfgOk()) sync(false); }, 900);
 if('serviceWorker' in navigator && (location.protocol==='https:' || location.hostname==='localhost' || location.hostname==='127.0.0.1')){
   window.addEventListener('load', function(){
     navigator.serviceWorker.register('./sw.js').catch(function(){});
+    // 若线上已有更新版本，主动接管，避免一直停在旧版
+    navigator.serviceWorker.ready.then(function(reg){
+      if(reg && reg.update) reg.update().catch(function(){});
+    }).catch(function(){});
+  });
+  // 页面被新 SW 接管时自动刷新一次（只在版本真的变了时发生）
+  var refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function(){
+    if(refreshing) return;
+    refreshing = true;
+    location.reload();
   });
 }
 })();
