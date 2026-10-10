@@ -565,12 +565,17 @@
       <div class="feat" data-act="about">
         <div class="ic" style="background:var(--pink);">ℹ️</div>
         <div class="n">关于</div>
-        <div class="d" id="featVer">v3.4.0</div>
+        <div class="d" id="featVer">v3.5.0</div>
       </div>
       <div class="feat" data-act="share">
         <div class="ic" style="background:var(--green);">🎁</div>
         <div class="n">分享给朋友</div>
         <div class="d">复制网址</div>
+      </div>
+      <div class="feat" data-act="update">
+        <div class="ic" style="background:var(--orange);">🔄</div>
+        <div class="n">检查更新</div>
+        <div class="d" id="featUpd">点一下刷新版本</div>
       </div>
     </div>
 
@@ -1907,6 +1912,51 @@ function shareApp(){
     copyText(url, '网址已复制');
   }
 }
+/* 静默检查线上版本；有新版本就提示一下，不强制刷新 */
+var VER = 'v3.5.0';
+var updateNotified = false;
+function autoCheckUpdate(){
+  if(updateNotified || !navigator.onLine) return;
+  fetch('./index.html?ver=' + Date.now(), { cache:'no-store' })
+    .then(function(r){ return r.ok ? r.text() : ''; })
+    .then(function(txt){
+      var m = txt.match(/id="featVer"[^>]*>([^<]+)</);
+      if(!m) return;
+      var remote = m[1].trim();
+      if(remote && remote !== VER){
+        updateNotified = true;
+        var fu = $('featUpd');
+        if(fu) fu.textContent = '有新版本 ' + remote;
+        toast('发现新版本，去「我的」点检查更新');
+      }
+    })
+    .catch(function(){});
+}
+
+/* 检查更新：清掉 SW 与缓存后重载，确保拿到线上最新版本 */
+function checkUpdate(){
+  toast('检查更新中…');
+  var reloaded = false;
+  function reload(){ if(reloaded) return; reloaded = true; location.reload(); }
+  setTimeout(reload, 2500);   // 兜底：2.5 秒后无论如何都重载
+
+  function clearCaches(){
+    if(typeof caches === 'undefined' || !caches.keys) return Promise.resolve();
+    return caches.keys().then(function(keys){
+      return Promise.all(keys.map(function(k){ return caches.delete(k); }));
+    }).catch(function(){});
+  }
+  function updateSW(){
+    if(!('serviceWorker' in navigator) || !navigator.serviceWorker.getRegistrations) return Promise.resolve();
+    return navigator.serviceWorker.getRegistrations().then(function(rs){
+      return Promise.all(rs.map(function(r){
+        try{ if(r.waiting && r.waiting.postMessage) r.waiting.postMessage('skipWaiting'); }catch(e){}
+        return r.update ? r.update().catch(function(){}) : null;
+      }));
+    }).catch(function(){});
+  }
+  Promise.all([clearCaches(), updateSW()]).then(reload).catch(reload);
+}
 
 /* ================= 事件绑定 ================= */
 function bind(){
@@ -1923,6 +1973,7 @@ function bind(){
       else if(a==='about') openAbout();
       else if(a==='share') shareApp();
       else if(a==='export') exportJson();
+      else if(a==='update') checkUpdate();
       else if(a==='inputmode'){
         S.inputMode = (S.inputMode==='card')?'input':'card';
         persist(); renderMe();
@@ -1949,7 +2000,13 @@ function bind(){
   $('btnSetBudget').onclick = openBudget;
   $('mask').addEventListener('click', function(e){ if(e.target===$('mask')) closeSheet(); });
   window.addEventListener('online', function(){ sync(false); });
-  document.addEventListener('visibilitychange', function(){ if(!document.hidden && S.cfg.auto) sync(false); });
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden){
+      if(S.cfg.auto) sync(false);
+      // 应用从后台回到前台时顺手检查一次新版本（iOS 主屏幕 App 很少自动更新 SW）
+      autoCheckUpdate();
+    }
+  });
 }
 function exportJson(){
   var out = { app:'lazy-ledger', version:3, exported_at:new Date().toISOString(), budget:S.budget, records:[] };
