@@ -295,13 +295,25 @@
   .foot-note{font-size:12.5px; font-weight:700; color:#5a5344; padding:2px 2px 6px;}
 
   /* ---------- 底栏 ---------- */
-  /* 用 fixed 定位：iOS 独立 App 下 fixed+bottom:0 一定贴屏幕底
-     （flex 布局里的 body 高度在 iOS 上会偏小，导致任务栏悬空） */
+  /* fixed + bottom:0 贴屏幕最底 */
   nav.tabbar{
     position:fixed; left:0; right:0; bottom:0; z-index:40;
     background:var(--paper); border-top:var(--bd);
-    padding:8px 8px calc(8px + env(safe-area-inset-bottom));
+    padding:8px;
     display:flex; gap:6px;
+  }
+  /* Safari 标签页模式：底部有工具栏 + Home Indicator，需要留出安全区 */
+  html[data-standalone="0"] nav.tabbar{
+    padding-bottom:calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+  /* 独立 App 模式（添加到主屏幕）：可视区已经包含 Home Indicator 区，
+     再加 safe-area 内边距会把任务栏顶上去，看起来像"悬空一格" */
+  html[data-standalone="1"] nav.tabbar{
+    padding-bottom:8px;
+  }
+  /* JS 尚未跑起来时的兜底（按 Safari 模式处理） */
+  html:not([data-standalone]) nav.tabbar{
+    padding-bottom:calc(8px + env(safe-area-inset-bottom, 0px));
   }
   nav.tabbar .tab{
     flex:1; background:none; border:3px solid transparent; padding:5px 0 6px;
@@ -404,6 +416,19 @@
   }
   #toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
 </style>
+<script>
+/* 首屏就判定是否「独立 App 模式」——必须在渲染前设置，
+   否则任务栏会先按 Safari 模式渲染再跳一下 */
+(function(){
+  var sa = 0;
+  try{
+    if(window.navigator.standalone === true) sa = 1;
+    else if(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) sa = 1;
+    else if(window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches) sa = 1;
+  }catch(e){}
+  document.documentElement.setAttribute('data-standalone', sa ? '1' : '0');
+})();
+</script>
 </head>
 <body>
 
@@ -579,7 +604,7 @@
       <div class="feat" data-act="about">
         <div class="ic" style="background:var(--pink);">ℹ️</div>
         <div class="n">关于</div>
-        <div class="d" id="featVer">v3.7.0</div>
+        <div class="d" id="featVer">v3.8.0</div>
       </div>
       <div class="feat" data-act="share">
         <div class="ic" style="background:var(--green);">🎁</div>
@@ -1927,7 +1952,7 @@ function shareApp(){
   }
 }
 /* 静默检查线上版本；有新版本就提示一下，不强制刷新 */
-var VER = 'v3.7.0';
+var VER = 'v3.8.0';
 var updateNotified = false;
 function autoCheckUpdate(){
   if(updateNotified || !navigator.onLine) return;
@@ -2037,20 +2062,33 @@ function exportJson(){
 /* ================= 启动 ================= */
 
 /* 精确设置布局尺寸
-   iOS 独立 App 下 CSS 的 100vh/100dvh 会偏小，导致底部留空、任务栏悬空。
    - --app-h：body 高度（= window.innerHeight，键盘弹出时用 visualViewport 兜底）
-   - --tab-h：任务栏实际高度（用于给内容区留出底部空间） */
+   - --tab-h：任务栏实际高度（用于给内容区留出底部空间）
+   - standalone 判断：iOS 上 navigator.standalone 最准；CSS 的 display-mode 有些版本不认 */
+function isStandalone(){
+  try{
+    if(window.navigator.standalone === true) return true;
+    if(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
+    if(window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches) return true;
+  }catch(e){}
+  return false;
+}
 function setAppHeight(){
   var h = window.innerHeight;
   if(!h) return;
   if(window.visualViewport && window.visualViewport.height){
     h = Math.max(h, Math.round(window.visualViewport.height));
   }
-  document.documentElement.style.setProperty('--app-h', h + 'px');
+  var root = document.documentElement;
+  root.style.setProperty('--app-h', h + 'px');
+  // 独立 App 模式：底部不要再留 safe-area（可视区已含 Home Indicator 区），
+  // 否则任务栏会被顶上去，看起来像"悬空一格"
+  root.setAttribute('data-standalone', isStandalone() ? '1' : '0');
   var tb = document.querySelector('nav.tabbar');
   if(tb){
+    // 先应用模式，再量高度，量到的才是最终值
     var th = Math.round(tb.getBoundingClientRect().height);
-    if(th > 0) document.documentElement.style.setProperty('--tab-h', th + 'px');
+    if(th > 0) root.style.setProperty('--tab-h', th + 'px');
   }
 }
 setAppHeight();
