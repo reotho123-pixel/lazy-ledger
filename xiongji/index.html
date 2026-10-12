@@ -375,14 +375,32 @@
     padding-bottom:calc(8px + env(safe-area-inset-bottom, 0px));
   }
   nav.tabbar .tab{
+    position:relative; z-index:1;
     flex:1; background:none; border-radius:999px; padding:7px 0 6px;
     display:flex; flex-direction:column; align-items:center; gap:3px;
     font-size:11px; font-weight:800; color:var(--nav-idle);
+    transition:color .22s ease;
   }
   nav.tabbar .tab .ti{height:20px; line-height:1; display:flex; align-items:center; justify-content:center;}
   nav.tabbar .tab .ti img{height:20px; width:auto; object-fit:contain;}
   nav.tabbar .tab .ti.emo{font-size:20px;}
-  nav.tabbar .tab.on{background:var(--paper); color:var(--pink);}
+  /* 选中态：颜色由 .nav-pill 那块滑动背景负责，这里只把文字/图标提亮 */
+  nav.tabbar .tab.on{background:none; color:var(--pink);}
+
+  /* 滑动胶囊：绝对定位，位置/尺寸由 JS 量出来后动画过去。
+     放在 .tab 之下（z-index:0），所以文字和图标仍浮在上面。 */
+  nav.tabbar .nav-pill{
+    position:absolute; left:0; top:0; width:0; height:0;
+    background:var(--paper); border-radius:999px;
+    pointer-events:none; z-index:0;
+    transition:transform .3s cubic-bezier(.34,1.15,.64,1),
+               width .3s cubic-bezier(.34,1.15,.64,1),
+               height .3s cubic-bezier(.34,1.15,.64,1);
+  }
+  /* 减弱动效偏好：直接跳，不做滑动 */
+  @media(prefers-reduced-motion:reduce){
+    nav.tabbar .nav-pill{transition:none}
+  }
 
   /* ---------- 弹层 ---------- */
   #mask{position:fixed; inset:0; background:rgba(76,101,112,.42); z-index:60; display:none; align-items:flex-end; justify-content:center;}
@@ -707,6 +725,7 @@
 </main>
 
 <nav class="tabbar">
+  <span class="nav-pill"></span>
   <button class="tab on" data-page="chat"><span class="ti"><img src="bears/b4_panda.png" alt=""></span>对话</button>
   <button class="tab" data-page="list"><span class="ti"><img src="bears/b1_faq.png" alt=""></span>账本</button>
   <button class="tab" data-page="stats"><span class="ti"><img src="bears/b3_wave.png" alt=""></span>统计</button>
@@ -1274,6 +1293,42 @@ var PAGE_META = {
   me:{ title:'我的', dot:'var(--mint)' }
 };
 var curPage='chat';
+
+/* 把滑动胶囊对齐到当前选中的 Tab。
+   animate=false 时（首次落位 / 布局变化）直接到位，不做过渡。
+   注意两个坑：
+     1. absolute 定位的原点是 padding box，而 getBoundingClientRect 给的是 border box，
+        要减掉边框宽度，否则整体偏移。
+     2. 首次落位必须先关过渡、强制回流、再恢复，否则会看到胶囊从左上角飞过来。 */
+function syncNavPill(animate){
+  var outer = document.querySelector('nav.tabbar');
+  if(!outer) return;
+  var pill = outer.querySelector('.nav-pill');
+  var on = outer.querySelector('.tab.on');
+  if(!pill || !on) return;
+
+  var or = outer.getBoundingClientRect();
+  var nr = on.getBoundingClientRect();
+  var w = nr.width, h = nr.height;
+  var x = nr.left - or.left - outer.clientLeft;
+  var y = nr.top - or.top - outer.clientTop;
+
+  var first = pill.dataset.placed !== '1';
+  if(first || !animate){
+    pill.style.transition = 'none';
+    pill.style.width = w + 'px';
+    pill.style.height = h + 'px';
+    pill.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+    void pill.offsetWidth;   // 强制回流后再恢复过渡，否则这次的 none 会被下一次覆盖
+    pill.style.transition = '';
+    pill.dataset.placed = '1';
+    return;
+  }
+  pill.style.width = w + 'px';
+  pill.style.height = h + 'px';
+  pill.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+}
+
 function showPage(name){
   curPage = name;
   Array.prototype.forEach.call(document.querySelectorAll('.page'), function(p){ p.classList.remove('active'); });
@@ -1281,6 +1336,7 @@ function showPage(name){
   Array.prototype.forEach.call(document.querySelectorAll('nav.tabbar .tab'), function(t){
     t.classList.toggle('on', t.getAttribute('data-page')===name);
   });
+  syncNavPill(true);   // 只有切 Tab 才让胶囊滑过去
   $('pgTitle').textContent = PAGE_META[name].title;
   $('pgDot').style.background = PAGE_META[name].dot;
   // 账本 / 统计 显示月份切换，对话 / 我的 显示计数
@@ -2271,6 +2327,8 @@ function setAppHeight(){
     // 先应用模式，再量高度，量到的才是最终值
     var th = Math.round(tb.getBoundingClientRect().height);
     if(th > 0) root.style.setProperty('--tab-h', th + 'px');
+    // 底栏尺寸可能因模式/安全区变化，胶囊要重新量一遍才对得齐
+    syncNavPill(false);
   }
 }
 setAppHeight();
