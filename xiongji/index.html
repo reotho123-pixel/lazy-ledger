@@ -6,7 +6,7 @@
 <meta name="format-detection" content="telephone=no">
 <title>熊记</title>
 <meta name="description" content="iPhone 快捷指令自动记账 · 手动记账 · 统计，离线可用，数据同步到自己的 GitHub 私有仓库">
-<meta name="theme-color" content="#FFFFFF">
+<meta name="theme-color" content="#B5DEE6">
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" type="image/png" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
@@ -38,18 +38,18 @@
      viewport 的 user-scalable=no 在 iOS 上会被忽略，touch-action 才管用；
      双击放大也用这条压掉（别用 touchend preventDefault，会吃掉 click）。 */
   html,body{touch-action:pan-x pan-y; overscroll-behavior:none;}
-  /* ⚠️「任务栏悬空一格」的成因与修法（v1.0.2 定稿）
-     现象：加到主屏后，白色任务栏下方留出约 62pt 的薄荷色横条，看着像任务栏被抬高了一格。
-     成因：独立 App 模式下屏幕最底约 62pt 是系统预留区（Home Indicator 等），网页画不到
-     那里，由系统取色填充。任务栏白、页面薄荷，两色一撞就显出断层。
-     主 App 一直没事：它的页面底色和任务栏同为奶油色，天生无缝。
-     修法：把所有「系统可能取色」的出口统统改成白 —— html 底色、body 的
-     background-color、meta theme-color、manifest 的 theme_color/background_color。
-     关键是 body：薄荷蓝不能再用 background-color 画（那会被系统取到），改用
-     background-image 两层（白圆点 + 薄荷渐变）实现，视觉与原来完全一致，
-     但计算出来的 background-color 仍是白。
+  /* ⚠️底部那条「预留区」——两个版本的经验都留在这里，别再走弯路：
+     iOS 独立 App 模式下，屏幕最底约 62pt 是系统预留区（Home Indicator / 工具栏位置），
+     网页画不到那里，由系统取「页面底色」填色。
+     · v1.0.x 的底栏是「贴底白条」→ 需要让预留区也是白的，所以当时把 body 底色、
+       theme-color、manifest 全改成 #FFFFFF（页面薄荷改用 background-image 画）。
+     · v1.1.0 起底栏改成「浮动胶囊」（离屏底 10px，四周露出页面背景）→ 预留区本来就该
+       是页面色，于是把上面那些颜色全部改回页面纸色 #B5DEE6，与页面无缝。
+     结论：**预留区颜色要跟「紧贴屏幕底部那块东西」一致**。底栏贴底就跟随底栏色，
+     底栏浮动就跟随页面色。改底栏形态时记得一起复查这四个值：
+     body background-color / meta theme-color / manifest theme_color / background_color。
      ⚠️ manifest 的颜色是「加到主屏时」缓存的，改完必须删掉主屏图标重新添加才生效。 */
-  html{-webkit-text-size-adjust:100%; overflow-anchor:none; height:100%; overflow:hidden; background:#FFFFFF;}
+  html{-webkit-text-size-adjust:100%; overflow-anchor:none; height:100%; overflow:hidden; background:#B5DEE6;}
   /* 三段式布局：标题 / 内容区（独立滚动）/ 输入栏 / 任务栏
      高度策略（按可靠性排序，JS 会覆盖成精确像素值）：
        1) JS 读 window.innerHeight 写进 --app-h（最准，iOS 独立 App 也准）
@@ -59,9 +59,12 @@
     height:100%;
     height:var(--app-h, 100%);
     margin:0; color:var(--ink);
-    /* background-color 必须是白（系统可能取这个值填底部预留区）；
-       薄荷蓝 + 白圆点用背景图两层画：上层圆点，下层纯薄荷，铺满整页。 */
-    background-color:#FFFFFF;
+    /* 底色 = 页面纸色（薄荷蓝）。
+       ⚠️ 这个值会让系统拿去填屏幕最底那条约 62pt 的预留区（网页画不到那里）。
+       之前为了让白底栏与那条无缝相接，这里曾改成白色；现在底栏改成了「浮动胶囊」，
+       四周本就该露出页面背景，所以改回薄荷 —— 那条预留区与页面同色，看不出断层。
+       薄荷蓝 + 白圆点仍用背景图两层画（见下）。 */
+    background-color:var(--paper);
     background-image:
       radial-gradient(#FFFFFF 2.2px, transparent 2.5px),
       linear-gradient(var(--paper), var(--paper));
@@ -157,11 +160,12 @@
     position:relative;
   }
   /* 对话页：绝对定位铺满内容区 —— 高度由 inset 决定，
-     不依赖 100% / 100vh / 100dvh（这些在 iOS 独立 App 下都不可靠） */
+     不依赖 100% / 100vh / 100dvh（这些在 iOS 独立 App 下都不可靠）。
+     底栏是浮动胶囊（离屏幕底 10px），所以留白要加上那段间距。 */
   #page-chat.active{
     position:absolute;
     top:8px; left:12px; right:12px;
-    bottom:calc(var(--tab-h, 92px) + 6px);
+    bottom:calc(var(--tab-h, 92px) + 24px);
     display:flex; flex-direction:column;
     overflow:hidden;
   }
@@ -170,9 +174,9 @@
   #page-chat #chatFeed{flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;}
   .page{display:none;}
   .page.active{display:block;}
-  /* 非对话页：底部留出任务栏高度，内容不被 Fixed 任务栏遮住 */
+  /* 非对话页：底部留出浮动胶囊的高度 + 它离屏幕底的那段间距 */
   #page-list.active, #page-stats.active, #page-me.active{
-    padding-bottom:calc(var(--tab-h, 92px) + 6px);
+    padding-bottom:calc(var(--tab-h, 92px) + 24px);
   }
 
   /* ---------- 对话页 ---------- */
@@ -415,36 +419,30 @@
   .feat .d{font-size:11.5px; font-weight:600; color:var(--muted); margin-top:1px;}
   .foot-note{font-size:11.5px; font-weight:600; color:var(--muted); padding:2px 4px 6px;}
 
-  /* ---------- 底栏（整条做成一个胶囊） ---------- */
-  /* fixed + bottom:0 贴屏幕最底。
-     ⚠️ iOS 独立 App 模式最底约 62pt 是系统预留区（网页画不到），系统取「页面底色」填色。
-     所以 body 的 background-color 必须是白（与底栏同色），薄荷蓝改用背景图绘制，
-     否则那条预留区会露出薄荷色、看着像任务栏悬空。详见 body 规则处的注释。 */
+  /* ---------- 底栏：浮动胶囊 ---------- */
+  /* 整条是一个独立胶囊，四周露出页面背景（薄荷 + 圆点），不再贴着屏幕边。
+     ⚠️ 屏幕最底约 62pt 是 iOS 系统预留区（网页画不到），系统取 body 的
+     background-color 填色；因此 body 底色必须是页面纸色（薄荷），那条就与页面同色。
+     详见 body 规则处的注释。 */
   nav.tabbar{
-    position:fixed; left:12px; right:12px; bottom:0; z-index:40;
+    position:fixed; left:14px; right:14px; bottom:10px; z-index:40;
     background:var(--paper2);
-    border-radius:24px 24px 0 0;          /* 整条 = 一个大胶囊（上圆角） */
-    box-shadow:0 -3px 16px rgba(70,120,132,.14);
-    padding:10px 12px;
+    border-radius:26px;                    /* 四角都圆 → 完整胶囊 */
+    box-shadow:0 6px 20px rgba(70,120,132,.20);
+    padding:9px 10px;
     display:flex; gap:4px;
   }
-  /* 左右留白处：把「胶囊缺口」两侧补白，让底栏视觉上仍是一整条贴底的白 */
-  nav.tabbar::before{
-    content:''; position:absolute; left:-12px; right:-12px; bottom:0; top:24px;
-    background:var(--paper2); z-index:-1;
-  }
-  /* Safari 标签页模式：底部有工具栏 + Home Indicator，需要留出安全区 */
+  /* Safari 标签页模式：底部有工具栏 + Home Indicator，胶囊整体上抬 */
   html[data-standalone="0"] nav.tabbar{
-    padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px));
+    bottom:calc(10px + env(safe-area-inset-bottom, 0px));
   }
-  /* 独立 App 模式（添加到主屏幕）：可视区已经包含 Home Indicator 区，
-     再加 safe-area 内边距会把任务栏顶上去，看起来像"悬空一格" */
+  /* 独立 App 模式（添加到主屏幕）：可视区已含 Home Indicator 区，不需要再抬 */
   html[data-standalone="1"] nav.tabbar{
-    padding-bottom:10px;
+    bottom:10px;
   }
   /* JS 尚未跑起来时的兜底（按 Safari 模式处理） */
   html:not([data-standalone]) nav.tabbar{
-    padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px));
+    bottom:calc(10px + env(safe-area-inset-bottom, 0px));
   }
   nav.tabbar .tab{
     position:relative; z-index:1;
@@ -581,7 +579,8 @@
   .badge.p{background:var(--pink-l); color:var(--pink);}
 
   #toast{
-    position:fixed; left:50%; bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 26px);
+    /* 底栏是浮动胶囊（离屏底 10px）→ toast 要抬到它上面 */
+    position:fixed; left:50%; bottom:calc(var(--tab-h, 92px) + 30px);
     transform:translateX(-50%) translateY(10px); z-index:90; opacity:0; pointer-events:none;
     background:rgba(76,101,112,.94); color:#fff; font-size:13px; font-weight:700; padding:11px 20px;
     border-radius:999px; box-shadow:var(--sh-sm); max-width:86vw; text-align:center;
@@ -782,9 +781,9 @@
         <div class="d" id="featSync">未配置</div>
       </div>
       <div class="feat" data-act="about">
-        <div class="ic"><img src="bears/i-other.png" alt=""></div>
+        <div class="ic"><img src="bears/b4_panda.png" alt=""></div>
         <div class="n">关于</div>
-        <div class="d" id="featVer">v1.1.0</div>
+        <div class="d" id="featVer">v1.1.1</div>
       </div>
       <div class="feat" data-act="update">
         <div class="ic"><img src="bears/b3_wave.png" alt=""></div>
@@ -2248,7 +2247,7 @@ function shareApp(){
   }
 }
 /* 静默检查线上版本；有新版本就提示一下，不强制刷新 */
-var VER = 'v1.1.0';
+var VER = 'v1.1.1';
 var updateNotified = false;
 function autoCheckUpdate(){
   if(updateNotified || !navigator.onLine) return;
