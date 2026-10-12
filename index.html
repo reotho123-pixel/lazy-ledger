@@ -344,6 +344,18 @@
   }
   .sheet-body{padding:14px 14px calc(20px + env(safe-area-inset-bottom));}
 
+  /* ---------- 二次确认层（替代 confirm） ---------- */
+  #cfm{position:fixed; inset:0; background:rgba(17,17,17,.55); z-index:80;
+    display:none; align-items:center; justify-content:center; padding:22px;}
+  #cfm.show{display:flex;}
+  #cfmBox{
+    width:100%; max-width:330px; background:var(--paper);
+    border:var(--bd); box-shadow:var(--sh); padding:20px 18px;
+    animation:cfmIn .16s ease;
+  }
+  @keyframes cfmIn{from{transform:scale(.94); opacity:.6;} to{transform:none; opacity:1;}}
+  #cfmMsg{font-size:15.5px; font-weight:900; line-height:1.6; text-align:center;}
+
   .fld{margin-bottom:15px;}
   .fld > .lb{font-size:14.5px; font-weight:900; margin-bottom:7px; display:block;}
   .fld input[type=text],.fld input[type=number],.fld input[type=password],.fld input[type=datetime-local],.fld select{
@@ -640,6 +652,19 @@
   </div>
 </div>
 
+<!-- ============ 二次确认层 ============
+     内置浏览器会静默拦掉原生 confirm（返回 false 且不显示），
+     所以二次确认必须自己做。这个层独立于 #mask，可以盖在弹层之上。 -->
+<div id="cfm">
+  <div id="cfmBox">
+    <div id="cfmMsg"></div>
+    <div class="btn-row" style="margin-top:14px;">
+      <button class="btn btn-r" id="cfmOk">确 定</button>
+      <button class="btn" id="cfmNo">取 消</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -762,6 +787,27 @@ function dayLabel(dayStr, ts){
   if(dayStr===yest) return '昨天';
   return dayStr.slice(5);
 }
+/* 二次确认（替代原生 confirm）。
+   内置浏览器/微信里 confirm 会被静默拦掉：不显示、直接返回 false，
+   于是「删除」这种操作点了完全没反应。所以改成自己画一层。
+   用法：askConfirm('确定删除？', function(){ ...真正要干的事... }, {okLabel:'删 除'}); */
+function askConfirm(msg, onOk, opts){
+  opts = opts || {};
+  var box = $('cfm'), okBtn = $('cfmOk'), noBtn = $('cfmNo');
+  if(!box || !okBtn || !noBtn) return;
+  $('cfmMsg').textContent = msg;
+  okBtn.textContent = opts.okLabel || '确 定';
+  okBtn.className = 'btn ' + (opts.danger === false ? 'btn-g' : 'btn-r');
+  noBtn.textContent = opts.cancelLabel || '取 消';
+
+  function close(){ box.classList.remove('show'); okBtn.onclick = null; noBtn.onclick = null; box.onclick = null; }
+  okBtn.onclick = function(e){ e.stopPropagation(); close(); if(onOk) onOk(); };
+  noBtn.onclick = function(e){ e.stopPropagation(); close(); };
+  // 点空白处 = 取消（破坏性操作不该被误触确认）
+  box.onclick = function(e){ if(e.target === box) close(); };
+  box.classList.add('show');
+}
+
 function toast(msg){
   var t=$('toast');
   t.textContent=msg;
@@ -1533,15 +1579,17 @@ function delRecordById(id, fromSheet){
   if(!id) return;
   var r = S.records[id];
   if(!r){ return; }
-  if(!confirm('确定删除这笔「'+r.category+' ¥'+num(r.amount)+'」吗？'+(S.known['data/'+id+'.json']?'（云端也会删除）':''))) return;
-  var path = 'data/'+id+'.json';
-  if(S.known[path]) S.delQ.push({ path:path, sha:S.known[path].sha });
-  delete S.records[id]; delete S.pending[id];
-  persist();
-  if(fromSheet) closeSheet();
-  renderAll();
-  toast('已删除');
-  if(isCfgOk() && navigator.onLine) sync(false);
+  var cloud = S.known['data/'+id+'.json'] ? '（云端也会删除）' : '';
+  askConfirm('确定删除这笔「'+r.category+' ¥'+num(r.amount)+'」吗？'+cloud, function(){
+    var path = 'data/'+id+'.json';
+    if(S.known[path]) S.delQ.push({ path:path, sha:S.known[path].sha });
+    delete S.records[id]; delete S.pending[id];
+    persist();
+    if(fromSheet) closeSheet();
+    renderAll();
+    toast('已删除');
+    if(isCfgOk() && navigator.onLine) sync(false);
+  }, { okLabel:'删 除' });
 }
 
 /* ================= 自然语言记账 ================= */
@@ -1641,9 +1689,10 @@ function openCats(){
   $('sheetX').onclick = closeSheet;
   $('catNew').onclick = function(){ openCatEdit(null); };
   $('catReset').onclick = function(){
-    if(!confirm('恢复成内置词典？你自定义的分类会丢失。')) return;
-    S.cats = null; persist(); openCats(); renderAll();
-    toast('已恢复内置词典');
+    askConfirm('恢复成内置词典？你自定义的分类会丢失。', function(){
+      S.cats = null; persist(); openCats(); renderAll();
+      toast('已恢复内置词典');
+    }, { okLabel:'恢 复' });
   };
   $('catExport').onclick = function(){
     var data = JSON.stringify(cats(), null, 2);
@@ -1798,11 +1847,12 @@ function openCatEdit(id){
   };
   var ed = $('ecDel');
   if(ed) ed.onclick = function(){
-    if(!confirm('删除这个分类？已记录的账目不受影响。')) return;
-    var list = (S.cats||JSON.parse(JSON.stringify(DEFAULT_CATS))).filter(function(x){ return x.id!==editCatId; });
-    S.cats = list; persist();
-    openCats(); renderAll();
-    toast('已删除');
+    askConfirm('删除这个分类？已记录的账目不受影响。', function(){
+      var list = (S.cats||JSON.parse(JSON.stringify(DEFAULT_CATS))).filter(function(x){ return x.id!==editCatId; });
+      S.cats = list; persist();
+      openCats(); renderAll();
+      toast('已删除');
+    }, { okLabel:'删 除' });
   };
 }
 
