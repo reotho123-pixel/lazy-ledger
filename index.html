@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <meta name="format-detection" content="telephone=no">
 <title>懒人记账</title>
 <meta name="description" content="iPhone 快捷指令自动记账 · 对话记账 · 统计，离线可用，数据同步到你的 GitHub 私有仓库">
@@ -36,6 +36,10 @@
     --tabbar-h:64px;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  /* 禁止双指捏合缩放（加进主屏后捏小会露出白边，看着像网页）。
+     viewport 的 user-scalable=no 在 iOS 上会被忽略，touch-action 才管用；
+     双击放大也用这条压掉（别用 touchend preventDefault，会吃掉 click）。 */
+  html,body{touch-action:pan-x pan-y; overscroll-behavior:none;}
   html{-webkit-text-size-adjust:100%; overflow-anchor:none; height:100%; overflow:hidden;}
   /* 三段式布局：标题 / 内容区（独立滚动）/ 输入栏 / 任务栏
      高度策略（按可靠性排序，JS 会覆盖成精确像素值）：
@@ -670,6 +674,22 @@
 <script>
 (function(){
 'use strict';
+
+/* 禁掉双指捏合缩放。加进主屏后还能捏小的话，露出的白边会让人一眼看出是网页。
+   viewport 的 user-scalable=no 在 iOS 上基本被忽略，真正管用的是这两条：
+     - gesturestart/change/end 是 iOS Safari 专有事件，拦掉即可
+     - touchmove 里判断多指兜底（部分 WebView 不发 gesture 事件）
+   注意：双击放大交给 CSS 的 touch-action:manipulation，
+   千万别在 touchend 里 preventDefault —— 那会把后续 click 一起吃掉，按钮全点不动。
+   iOS「辅助功能 → 缩放」的三指手势是系统级，网页拦不住也不该拦。 */
+(function lockZoom(){
+  ['gesturestart','gesturechange','gestureend'].forEach(function(ev){
+    document.addEventListener(ev, function(e){ e.preventDefault(); }, { passive:false });
+  });
+  document.addEventListener('touchmove', function(e){
+    if (e.touches && e.touches.length > 1) e.preventDefault();
+  }, { passive:false });
+})();
 
 /* ================= 常量 ================= */
 var KEY = 'lazy-ledger-v1';
