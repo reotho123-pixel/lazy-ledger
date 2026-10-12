@@ -6,7 +6,7 @@
 <meta name="format-detection" content="telephone=no">
 <title>熊记</title>
 <meta name="description" content="iPhone 快捷指令自动记账 · 手动记账 · 统计，离线可用，数据同步到自己的 GitHub 私有仓库">
-<meta name="theme-color" content="#B5DEE6">
+<meta name="theme-color" content="#FFFFFF">
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" type="image/png" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
@@ -38,7 +38,19 @@
      viewport 的 user-scalable=no 在 iOS 上会被忽略，touch-action 才管用；
      双击放大也用这条压掉（别用 touchend preventDefault，会吃掉 click）。 */
   html,body{touch-action:pan-x pan-y; overscroll-behavior:none;}
-  html{-webkit-text-size-adjust:100%; overflow-anchor:none; height:100%; overflow:hidden;}
+  /* ⚠️ 底部「悬空一格」的真正原因（2026-10-12 查清，与主 App 同一个坑）
+     iOS 独立 App（加到主屏）下，屏幕最底部有一条约 62pt 的区域是系统预留的
+     （Home Indicator + 工具栏位置），网页画不到那里，系统会拿「App 主题色」给它填色。
+     任务栏是纯白、主题色却是薄荷蓝，于是白色到预留区上沿就断了，底下露出一格薄荷，
+     看起来就像任务栏被抬高了一格。
+     证据：主 App 的任务栏(#F7F0DE)和主题色(#F7F0DE)恰好同色，所以它天然看不出断层；
+     本应用白栏配薄荷主题色才把它暴露出来。预留带里没有圆点、颜色完全均匀，也说明
+     那段不是网页画的（网页画的地方都有圆点）。
+     修法 = 让预留区的颜色与任务栏一致：
+       ① meta theme-color 改白；② manifest 的 theme_color / background_color 改白；
+       ③ html 底色改白（万一系统取的是画布底色而不是主题色，也能覆盖到）。
+     页面本身不变：薄荷蓝底 + 白圆点仍在 body 上，铺满网页可视区。 */
+  html{-webkit-text-size-adjust:100%; overflow-anchor:none; height:100%; overflow:hidden; background:#FFFFFF;}
   /* 三段式布局：标题 / 内容区（独立滚动）/ 输入栏 / 任务栏
      高度策略（按可靠性排序，JS 会覆盖成精确像素值）：
        1) JS 读 window.innerHeight 写进 --app-h（最准，iOS 独立 App 也准）
@@ -353,7 +365,16 @@
   .foot-note{font-size:11.5px; font-weight:600; color:var(--muted); padding:2px 4px 6px;}
 
   /* ---------- 底栏 ---------- */
-  /* fixed + bottom:0 贴屏幕最底 */
+  /* fixed + bottom:0 贴屏幕最底。
+     ⚠️ iOS 独立 App 模式会在屏幕最底部预留一条约 62pt 高的区域（原本留给 Safari
+     工具栏 / Home Indicator），网页画不到那里，系统用 manifest 的 background_color
+     填色。任务栏的白色到预留区上沿就截止，底下露出 62pt 的薄荷色，看起来就像
+     "整条任务栏被抬高了一格"。
+     修法（与主 App v3.8 同思路，但这里底栏是纯白、页面是点纹薄荷，所以要把预留区
+     的颜色也对上）：
+       ① manifest background_color 改成白色 → 预留区变成白的，与底栏无缝相接；
+       ② 独立 App 模式不加 safe-area 内边距（加了反而把栏顶上去）；
+       ③ 底栏上圆角保留，白底一直铺到屏幕最底。 */
   nav.tabbar{
     position:fixed; left:0; right:0; bottom:0; z-index:40;
     background:var(--paper2); border-radius:22px 22px 0 0;
