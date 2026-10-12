@@ -87,33 +87,66 @@
   .box{background:var(--paper2); border-radius:var(--r-lg); box-shadow:var(--sh);}
   .pad{padding:14px;}
 
-  /* ---------- 顶栏（三段布局的第一段） ---------- */
+  /* ---------- 顶栏（三段布局的第一段）----------
+     只保留一个居中的日期按钮（上面贴一张熊贴纸），点了从按钮形变展开月份面板。 */
   header{
     flex:none; z-index:35;
     background:transparent;
-    padding:calc(10px + env(safe-area-inset-top)) 12px 2px;
-    display:flex; align-items:center; gap:8px;
+    padding:calc(10px + env(safe-area-inset-top)) 12px 6px;
+    display:flex; align-items:center; justify-content:center;
   }
-  .pg-title{
+  /* 日期按钮 = 月选择面板的形变源（起点矩形由 getBoundingClientRect 实时量） */
+  .date-chip{
+    position:relative;
     background:var(--paper2); border-radius:999px; box-shadow:var(--sh-sm);
-    padding:7px 18px; font-size:16px; font-weight:800; letter-spacing:2px;
-    color:var(--pink); position:relative; flex:none;
+    padding:9px 20px 9px 15px; display:flex; align-items:center; gap:8px;
+    font-size:15px; font-weight:800; color:var(--ink); letter-spacing:.5px;
+    will-change:transform;
   }
-  .pg-title::after{content:''; position:absolute; right:-2px; top:-14px; width:34px; height:30px;
-    background:url('./bears/b3_wave.png') no-repeat center/contain; pointer-events:none;}
-  .pg-dot{width:12px; height:12px; border-radius:50%; flex:none; margin-left:6px; background:var(--pink);}
-  .pg-chip{
-    margin-left:auto; background:var(--paper2); border-radius:999px; box-shadow:var(--sh-sm);
-    padding:6px 14px; font-size:12.5px; font-weight:800; white-space:nowrap; color:var(--muted);
+  .date-chip .date-text{white-space:nowrap;}
+  /* 日期上的熊贴纸（轻微倾斜，像贴纸贴上去） */
+  .date-chip .date-sticker{
+    width:26px; height:26px; flex:none; margin-left:-4px;
+    display:flex; align-items:center; justify-content:center;
+    transform:rotate(-10deg);
   }
-  .pg-chip.pink{color:var(--pink);}
-  .pg-nav{display:flex; align-items:center; gap:6px; margin-left:auto;}
-  .pg-nav .nb{
-    width:32px; height:32px; background:var(--paper2); border-radius:50%;
-    box-shadow:var(--sh-sm); font-size:17px; font-weight:800; color:var(--ink);
+  .date-chip .date-sticker img{width:100%; height:100%; object-fit:contain;}
+  /* 小三角提示「可点」 */
+  .date-chip .date-caret{
+    width:0; height:0; flex:none;
+    border-left:5px solid transparent; border-right:5px solid transparent;
+    border-top:6px solid var(--muted); margin-left:1px;
+  }
+
+  /* ---------- 月份选择面板（Trigger Morph：从日期按钮长出来） ---------- */
+  .dp-mask{
+    position:fixed; inset:0; z-index:70;
+    background:rgba(76,101,112,.42);
+    opacity:0; pointer-events:none; transition:opacity .28s ease;
+  }
+  .dp-mask.show{opacity:1; pointer-events:auto;}
+  .dp-panel{
+    position:fixed; z-index:71; overflow:hidden;
+    background:var(--paper2); box-shadow:var(--sh);
+    display:none;   /* 展开时由 JS 打开 */
+  }
+  .dp-panel.show{display:block;}
+  .dp-inner{padding:16px; opacity:0;}   /* 内容延迟淡入，避免被拉伸变形 */
+  .dp-year{display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:14px;}
+  .dp-year .dp-y{font-size:17px; font-weight:800; letter-spacing:1px; min-width:84px; text-align:center;}
+  .dp-year .dp-yb{
+    width:34px; height:34px; border-radius:50%; background:var(--av-bg);
+    box-shadow:var(--sh-sm); font-size:17px; font-weight:800;
     display:flex; align-items:center; justify-content:center; padding:0;
   }
-  .pg-nav .ym{font-size:14px; font-weight:800; white-space:nowrap; padding:0 4px; color:var(--ink);}
+  .dp-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:9px;}
+  .dp-cell{
+    padding:11px 4px; border-radius:var(--r-sm); background:var(--av-bg);
+    font-size:14px; font-weight:800; text-align:center; color:var(--ink);
+  }
+  .dp-cell.on{background:var(--pink-l); color:var(--pink);}
+  .dp-cell.future{opacity:.35;}
+  .dp-today{margin-top:14px;}
 
   /* 内容区：三段布局的第二段，独立滚动 */
   main{
@@ -187,6 +220,23 @@
     background:url('./bears/b1_faq.png') no-repeat center/contain;
     opacity:.2; pointer-events:none; z-index:0;
   }
+  /* ---------- 记录卡片堆叠滚动（Stacked Card Scroll）----------
+     规格见 ~/.agents/skills/app-interaction-design/references/interaction-patterns.md 第 9 条。
+     做法要点（照搬参考里实测通过的版本）：
+       · 每张卡 position:sticky + 内联 top 阶梯 → 自然吸顶
+       · 吸顶后的 scale / 上移 / opacity / zIndex 全部由真实 scrollTop 算出，天然可逆
+       · 缩放下限 0.9、透明度下限 0.6，保证文字可读
+     卡片尺寸由 JS 统一写死高度，节距才可预测。 */
+  #chatFeed{position:relative;}
+  .stack-card{
+    position:sticky;
+    margin-bottom:12px;
+    transform-origin:50% 0%;
+    will-change:transform, opacity;
+    backface-visibility:hidden;
+  }
+  /* 最后一张卡后面的留白，否则它滚不到吸顶位 */
+  .stack-tail{height:44vh; pointer-events:none;}
   .cc-top{display:flex; align-items:center; gap:11px; position:relative; z-index:1;}
   .cc-emoji{
     width:54px; height:54px; border-radius:var(--r-sm); flex:none;
@@ -211,7 +261,6 @@
     border-radius:999px; box-shadow:var(--sh-sm); background:var(--av-bg);
     padding:5px 13px; font-size:12px; font-weight:800; color:var(--ink);
   }
-  .cc-edit:active,.cc-del:active{transform:scale(.94);}
   .cc-del{background:var(--pink-l); color:var(--pink);}
 
   .quick-row{display:flex; flex-wrap:wrap; gap:9px; margin-bottom:12px;}
@@ -219,7 +268,6 @@
     background:var(--paper2); border-radius:999px; box-shadow:var(--sh-sm);
     padding:9px 15px; font-size:13px; font-weight:700;
   }
-  .quick:active{transform:scale(.95);}
 
   /* 记账输入区：贴在主卡下方，固定不动（不参与滚动） */
   .composer{
@@ -233,7 +281,6 @@
     flex:1; border-radius:999px; box-shadow:var(--sh-sm); background:var(--av-bg);
     padding:10px; font-size:14px; font-weight:800; color:var(--muted);
   }
-  .cbtn:active{transform:scale(.97);}
   .cbtn.on-ex{background:var(--pink-l); color:var(--pink);}
   .cbtn.on-in{background:#DFF4EE; color:var(--mint);}
 
@@ -248,7 +295,7 @@
     font-size:22px; font-weight:800; color:#fff;
     display:flex; align-items:center; justify-content:center; padding:0;
   }
-  .send-btn:active{transform:scale(.94);}
+
 
   /* ---------- 账本页 ---------- */
   .sum-card{border-radius:var(--r-lg); box-shadow:var(--sh); background:var(--paper2); padding:14px 16px; margin-bottom:12px;}
@@ -359,55 +406,58 @@
   .me-hero .s{font-size:11.5px; font-weight:600; color:var(--muted);}
   .feat-grid{display:grid; grid-template-columns:1fr 1fr; gap:11px; margin-bottom:12px;}
   .feat{border-radius:var(--r-md); box-shadow:var(--sh-sm); background:var(--paper2); padding:12px; cursor:pointer;}
-  .feat:active{transform:scale(.97);}
-  .feat .ic{width:40px; height:40px; border-radius:12px; display:flex; align-items:center;
-    justify-content:center; font-size:20px; margin-bottom:8px; overflow:hidden;}
-  .feat .ic img{max-width:78%; max-height:78%; object-fit:contain;}
+
+  /* 图标再放大（用户反馈「我的」页图标太小）：底板与熊图都加大 */
+  .feat .ic{width:54px; height:54px; border-radius:16px; display:flex; align-items:center;
+    justify-content:center; font-size:20px; margin-bottom:9px; overflow:hidden;}
+  .feat .ic img{max-width:88%; max-height:88%; object-fit:contain;}
   .feat .n{font-size:14.5px; font-weight:800;}
   .feat .d{font-size:11.5px; font-weight:600; color:var(--muted); margin-top:1px;}
   .foot-note{font-size:11.5px; font-weight:600; color:var(--muted); padding:2px 4px 6px;}
 
-  /* ---------- 底栏 ---------- */
+  /* ---------- 底栏（整条做成一个胶囊） ---------- */
   /* fixed + bottom:0 贴屏幕最底。
-     ⚠️ iOS 独立 App 模式会在屏幕最底部预留一条约 62pt 高的区域（原本留给 Safari
-     工具栏 / Home Indicator），网页画不到那里，系统用 manifest 的 background_color
-     填色。任务栏的白色到预留区上沿就截止，底下露出 62pt 的薄荷色，看起来就像
-     "整条任务栏被抬高了一格"。
-     修法（与主 App v3.8 同思路，但这里底栏是纯白、页面是点纹薄荷，所以要把预留区
-     的颜色也对上）：
-       ① manifest background_color 改成白色 → 预留区变成白的，与底栏无缝相接；
-       ② 独立 App 模式不加 safe-area 内边距（加了反而把栏顶上去）；
-       ③ 底栏上圆角保留，白底一直铺到屏幕最底。 */
+     ⚠️ iOS 独立 App 模式最底约 62pt 是系统预留区（网页画不到），系统取「页面底色」填色。
+     所以 body 的 background-color 必须是白（与底栏同色），薄荷蓝改用背景图绘制，
+     否则那条预留区会露出薄荷色、看着像任务栏悬空。详见 body 规则处的注释。 */
   nav.tabbar{
-    position:fixed; left:0; right:0; bottom:0; z-index:40;
-    background:var(--paper2); border-radius:22px 22px 0 0;
-    box-shadow:0 -3px 14px rgba(70,120,132,.13);
-    padding:8px 10px;
-    display:flex; gap:6px;
+    position:fixed; left:12px; right:12px; bottom:0; z-index:40;
+    background:var(--paper2);
+    border-radius:24px 24px 0 0;          /* 整条 = 一个大胶囊（上圆角） */
+    box-shadow:0 -3px 16px rgba(70,120,132,.14);
+    padding:10px 12px;
+    display:flex; gap:4px;
+  }
+  /* 左右留白处：把「胶囊缺口」两侧补白，让底栏视觉上仍是一整条贴底的白 */
+  nav.tabbar::before{
+    content:''; position:absolute; left:-12px; right:-12px; bottom:0; top:24px;
+    background:var(--paper2); z-index:-1;
   }
   /* Safari 标签页模式：底部有工具栏 + Home Indicator，需要留出安全区 */
   html[data-standalone="0"] nav.tabbar{
-    padding-bottom:calc(8px + env(safe-area-inset-bottom, 0px));
+    padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px));
   }
   /* 独立 App 模式（添加到主屏幕）：可视区已经包含 Home Indicator 区，
      再加 safe-area 内边距会把任务栏顶上去，看起来像"悬空一格" */
   html[data-standalone="1"] nav.tabbar{
-    padding-bottom:8px;
+    padding-bottom:10px;
   }
   /* JS 尚未跑起来时的兜底（按 Safari 模式处理） */
   html:not([data-standalone]) nav.tabbar{
-    padding-bottom:calc(8px + env(safe-area-inset-bottom, 0px));
+    padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px));
   }
   nav.tabbar .tab{
     position:relative; z-index:1;
-    flex:1; background:none; border-radius:999px; padding:7px 0 6px;
-    display:flex; flex-direction:column; align-items:center; gap:3px;
-    font-size:11px; font-weight:800; color:var(--nav-idle);
+    flex:1; background:none; border-radius:999px; padding:8px 0 7px;
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+    font-size:11.5px; font-weight:800; color:var(--nav-idle);
     transition:color .22s ease;
+    will-change:transform;
   }
-  nav.tabbar .tab .ti{height:20px; line-height:1; display:flex; align-items:center; justify-content:center;}
-  nav.tabbar .tab .ti img{height:20px; width:auto; object-fit:contain;}
-  nav.tabbar .tab .ti.emo{font-size:20px;}
+  /* 图标放大（用户要求） */
+  nav.tabbar .tab .ti{height:27px; line-height:1; display:flex; align-items:center; justify-content:center;}
+  nav.tabbar .tab .ti img{height:27px; width:auto; object-fit:contain;}
+  nav.tabbar .tab .ti.emo{font-size:27px;}
   /* 选中态：颜色由 .nav-pill 那块滑动背景负责，这里只把文字/图标提亮 */
   nav.tabbar .tab.on{background:none; color:var(--pink);}
 
@@ -474,7 +524,7 @@
     border-radius:999px; box-shadow:var(--sh-sm); background:var(--paper2);
     padding:12px 16px; font-size:14px; font-weight:800;
   }
-  .btn:active{transform:scale(.97);}
+
   .btn-y{background:var(--pink-l); color:var(--pink);}
   .btn-c{background:var(--av-bg);}
   .btn-g{background:#DFF4EE; color:var(--mint);}
@@ -541,6 +591,19 @@
 
   /* ---------- 熊主题装饰（重度） ---------- */
   .achip img{width:18px; height:18px; object-fit:contain; vertical-align:-4px; margin-right:3px;}
+
+  /* ---------- 弹簧按压回弹（Spring Press）----------
+     规格见 references/button-feedback.md 第 1 条：
+       · 按下 1 → 0.93，过阻尼（k=470/d=27，几乎不过冲）—— 必须快速到位
+       · 松手回到 1 并过冲约 +2.5%，欠阻尼（k=380/d=12）—— 这才是回弹
+       · 按住时叠一层 12% 暗色
+       · 形变只作用在按钮自身（scale 等比，不会压变文字）
+     由 JS 用同一弹簧值驱动 transform 与遮罩，两个属性不脱节。 */
+  .spring{position:relative; will-change:transform;}
+  .spring::after{
+    content:''; position:absolute; inset:0; border-radius:inherit;
+    background:#000; opacity:0; pointer-events:none;
+  }
 </style>
 <script>
 /* 首屏就判定是否「独立 App 模式」——必须在渲染前设置，
@@ -559,15 +622,26 @@
 <body>
 
 <header>
-  <div class="pg-title" id="pgTitle">对话</div>
-  <span class="pg-dot" id="pgDot"></span>
-  <div class="pg-chip" id="pgChip">—</div>
-  <div class="pg-nav" id="pgNav" style="display:none;">
-    <button class="nb" id="mPrev">‹</button>
-    <span class="ym" id="mLabel">—</span>
-    <button class="nb" id="mNext">›</button>
-  </div>
+  <button class="date-chip" id="dateBtn">
+    <span class="date-sticker"><img src="bears/i-riyong.png" alt=""></span>
+    <span class="date-text" id="dateLabel">—</span>
+    <span class="date-caret" aria-hidden="true"></span>
+  </button>
 </header>
+
+<!-- 月份选择面板：从日期按钮「形变展开」（Trigger Morph，见参考资料第 8 条） -->
+<div id="dpMask" class="dp-mask"></div>
+<div id="dpPanel" class="dp-panel" aria-hidden="true">
+  <div class="dp-inner" id="dpInner">
+    <div class="dp-year">
+      <button class="dp-yb" id="dpPrevY">‹</button>
+      <span class="dp-y" id="dpYear">—</span>
+      <button class="dp-yb" id="dpNextY">›</button>
+    </div>
+    <div class="dp-grid" id="dpGrid"></div>
+    <button class="btn btn-y btn-full dp-today" id="dpToday">回到本月</button>
+  </div>
+</div>
 
 <main>
   <!-- ============ 对话 ============ -->
@@ -634,8 +708,6 @@
 
     <div class="grid2">
       <div class="cell"><div class="k">收入</div><div class="v" id="stIn">0.00</div></div>
-      <div class="cell"><div class="k">结余</div><div class="v" id="stBal">0.00</div></div>
-      <div class="cell"><div class="k" id="stAvgK">日均 · 0 天有记录</div><div class="v sm" id="stAvg">0.00</div></div>
       <div class="cell"><div class="k">笔数</div><div class="v sm" id="stCount">0 笔</div></div>
     </div>
 
@@ -699,16 +771,6 @@
         <div class="n">分类管理</div>
         <div class="d" id="featCatCount">—</div>
       </div>
-      <div class="feat" data-act="recurring">
-        <div class="ic"><img src="bears/i-tongxun.png" alt=""></div>
-        <div class="n">周期账单</div>
-        <div class="d" id="featRecCount">0 个</div>
-      </div>
-      <div class="feat" data-act="budget">
-        <div class="ic"><img src="bears/i-juzhu.png" alt=""></div>
-        <div class="n">月度预算</div>
-        <div class="d" id="featBud">未设置</div>
-      </div>
       <div class="feat" data-act="export">
         <div class="ic"><img src="bears/i-gouwu.png" alt=""></div>
         <div class="n">导出数据</div>
@@ -719,18 +781,10 @@
         <div class="n">GitHub 同步</div>
         <div class="d" id="featSync">未配置</div>
       </div>
-    </div>
-
-    <div class="feat-grid">
       <div class="feat" data-act="about">
         <div class="ic"><img src="bears/i-other.png" alt=""></div>
         <div class="n">关于</div>
-        <div class="d" id="featVer">v1.0.2</div>
-      </div>
-      <div class="feat" data-act="share">
-        <div class="ic"><img src="bears/b4_panda.png" alt=""></div>
-        <div class="n">分享给朋友</div>
-        <div class="d">复制网址</div>
+        <div class="d" id="featVer">v1.1.0</div>
       </div>
       <div class="feat" data-act="update">
         <div class="ic"><img src="bears/b3_wave.png" alt=""></div>
@@ -745,7 +799,7 @@
 
 <nav class="tabbar">
   <span class="nav-pill"></span>
-  <button class="tab on" data-page="chat"><span class="ti"><img src="bears/b4_panda.png" alt=""></span>对话</button>
+  <button class="tab on" data-page="chat"><span class="ti"><img src="bears/b4_panda.png" alt=""></span>记录</button>
   <button class="tab" data-page="list"><span class="ti"><img src="bears/b1_faq.png" alt=""></span>账本</button>
   <button class="tab" data-page="stats"><span class="ti"><img src="bears/b3_wave.png" alt=""></span>统计</button>
   <button class="tab" data-page="me"><span class="ti"><img src="bears/b2_info.png" alt=""></span>我的</button>
@@ -1354,12 +1408,7 @@ function showPage(name){
     t.classList.toggle('on', t.getAttribute('data-page')===name);
   });
   syncNavPill(true);   // 只有切 Tab 才让胶囊滑过去
-  $('pgTitle').textContent = PAGE_META[name].title;
-  $('pgDot').style.background = PAGE_META[name].dot;
-  // 账本 / 统计 显示月份切换，对话 / 我的 显示计数
-  var showNav = (name==='list' || name==='stats');
-  $('pgNav').style.display = showNav ? 'flex' : 'none';
-  $('pgChip').style.display = showNav ? 'none' : 'block';
+  updateDateLabel();
   renderAll();
   var m = document.querySelector('main');
   if(m) m.scrollTop = 0;
@@ -1398,7 +1447,7 @@ function renderChat(){
     var html = '';
     recs.slice(0,20).forEach(function(r){
       var isIn = r.type==='income';
-      html += '<div class="chat-card" data-id="'+esc(r.id)+'">'
+      html += '<div class="chat-card stack-card" data-id="'+esc(r.id)+'">'
         + '<div class="cc-top">'
         +   '<div class="cc-emoji">'+catIcon(r.category)+'</div>'
         +   '<div class="cc-mid">'
@@ -1417,6 +1466,8 @@ function renderChat(){
         +   '</span></div>'
         + '</div>';
     });
+    // 尾部留白：否则最后一张卡滚不到吸顶位（参考文档明确列的坑）
+    html += '<div class="stack-tail"></div>';
     feed.innerHTML = html;
     // 点卡片本身 → 编辑
     Array.prototype.forEach.call(feed.querySelectorAll('.chat-card'), function(el){
@@ -1437,6 +1488,13 @@ function renderChat(){
         delRecordById(b.getAttribute('data-del'));
       });
     });
+    // 卡片堆叠滚动：铺吸顶阶梯 + 首次计算
+    prepareStack();
+    initStackScroll();
+    feed.scrollTop = 0;
+    updateStack();
+    // 给新渲染出来的按钮挂弹簧按压（事件委托拿不到「哪个按钮」，这里逐个挂）
+    attachSpringAll(feed);
   }
 }
 function relTime(r){
@@ -1465,7 +1523,6 @@ function monthSum(ym){
 function renderList(){
   var ym = listYm;
   var s = monthSum(ym);
-  $('mLabel').textContent = ym.replace('-','年')+'月';
   $('listLabel').textContent = ym.replace('-','年')+'月 支出';
   $('listAmt').textContent = money(s.ex);
   $('listCnt').textContent = s.cnt+' 笔';
@@ -1527,7 +1584,6 @@ function renderList(){
 var statYm = (function(){ var d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1); })();
 function renderStats(){
   var ym = statYm;
-  $('mLabel').textContent = ym.replace('-','年')+'月';
   var ex=0, inc=0, cnt=0, exCnt=0, catSum={}, days=new Set();
   var y=Number(ym.slice(0,4)), mo=Number(ym.slice(5,7));
   for(var id in S.records){
@@ -1542,10 +1598,6 @@ function renderStats(){
   $('stEx').textContent = money(ex);
   $('stCnt').textContent = cnt+' 笔';
   $('stIn').textContent = num(inc);
-  $('stBal').textContent = num(inc-ex);
-  var dayN = days.size||1;
-  $('stAvgK').textContent = '日均 · '+days.size+' 天有记录';
-  $('stAvg').textContent = num(ex/dayN);
   $('stCount').textContent = cnt+' 笔';
 
   // 分类占比（前 4）
@@ -1631,8 +1683,6 @@ function renderMe(){
   var n = Object.keys(S.records).length;
   $('meCount').textContent = '已记录 '+n+' 笔';
   $('featCatCount').textContent = cats().length+' 个';
-  $('featRecCount').textContent = S.recurring.length+' 个';
-  $('featBud').textContent = (Number(S.budget)>0) ? ('¥'+num(S.budget)) : '未设置';
   $('featExp').textContent = n+' 笔';
   $('featSync').textContent = isCfgOk() ? (S.lastSync?('已同步 '+hmStr(S.lastSync)):'已配置') : '未配置';
   $('meFoot').textContent = isCfgOk()
@@ -1640,7 +1690,7 @@ function renderMe(){
     : '数据只存在本机，未配置云端同步。';
 }
 function renderSyncBadge(txt){
-  if(curPage==='list' && txt) $('pgChip').textContent = txt;
+  /* 顶栏已改成只有日期按钮，不再显示同步文字（同步状态可在「我的」页看） */
 }
 function renderAll(){
   if(curPage==='chat') renderChat();
@@ -2198,7 +2248,7 @@ function shareApp(){
   }
 }
 /* 静默检查线上版本；有新版本就提示一下，不强制刷新 */
-var VER = 'v1.0.2';
+var VER = 'v1.1.0';
 var updateNotified = false;
 function autoCheckUpdate(){
   if(updateNotified || !navigator.onLine) return;
@@ -2251,7 +2301,306 @@ function checkUpdate(){
   Promise.all([clearCaches(), updateSW()]).then(reload).catch(reload);
 }
 
-/* ================= 事件绑定 ================= */
+/* ================= 弹簧按压回弹（Spring Press）=================
+   规格：references/button-feedback.md 第 1 条。
+   按下与松手用两组不同参数 —— 按住是「跟手到位」（过阻尼，几乎不过冲），
+   松手才是「回弹」（欠阻尼）。这是最容易做错的地方，别用同一组参数。
+   用同一个弹簧值同时驱动 scale 与暗色遮罩，两者不会脱节。 */
+var SPRING = {
+  downK: 470, downD: 27,   // ζ≈0.62：快、几乎不回弹
+  upK:   380, upD:   12,   // ζ≈0.31：软、带回弹
+  to: 0.93                 // 按下时缩到 93%
+};
+function attachSpring(el, opts){
+  if(!el || el.dataset.spring === '1') return;
+  el.dataset.spring = '1';
+  el.classList.add('spring');
+  var o = opts || {};
+  var to = (typeof o.scale === 'number') ? o.scale : SPRING.to;
+
+  var cur = 1, vel = 0, raf = 0, pressed = false, last = 0;
+  var shade = el.querySelector(':scope > .spring-shade');
+  if(!shade){
+    shade = document.createElement('span');
+    shade.className = 'spring-shade';
+    shade.style.cssText = 'position:absolute;inset:0;border-radius:inherit;background:#000;opacity:0;pointer-events:none;';
+    if(getComputedStyle(el).position === 'static') el.style.position = 'relative';
+    el.appendChild(shade);
+  }
+
+  function stop(){ if(raf){ cancelAnimationFrame(raf); raf = 0; } }
+  function tick(ts){
+    raf = 0;
+    if(!last) last = ts;
+    var dt = Math.min((ts - last) / 1000, 0.032);   // 夹住大跳帧，避免弹簧数值爆炸
+    last = ts;
+    var k = pressed ? SPRING.downK : SPRING.upK;
+    var d = pressed ? SPRING.downD : SPRING.upD;
+    var target = pressed ? to : 1;
+
+    var a = -k * (cur - target) - d * vel;
+    vel += a * dt;
+    cur += vel * dt;
+
+    // 只在值真的变化时写样式（每帧盲写会让浏览器反复失效样式）
+    var v = Math.round(cur * 1000) / 1000;
+    if(el._springV !== v){
+      el._springV = v;
+      el.style.transform = 'scale(' + v + ')';
+      // 遮罩跟着同一个弹簧值走：按下时最多 12% 暗色
+      var sh = v < 1 ? Math.min(0.12, (1 - v) / (1 - to) * 0.12) : Math.max(0, 0.12 - (v - 1) * 4.8);
+      shade.style.opacity = sh.toFixed(3);
+    }
+
+    var settled = Math.abs(cur - target) < 0.0006 && Math.abs(vel) < 0.006;
+    if(settled){
+      cur = target; vel = 0; last = 0;
+      el._springV = cur;
+      el.style.transform = 'scale(' + cur + ')';
+      shade.style.opacity = (pressed ? '0.12' : '0');
+      return;
+    }
+    raf = requestAnimationFrame(tick);
+  }
+  function start(p, v){
+    stop(); pressed = p; cur = v; vel = 0; last = 0;
+    raf = requestAnimationFrame(tick);
+  }
+  function down(e){
+    if(o.disabled && o.disabled()) return;
+    start(true, 1);
+  }
+  function up(){
+    if(!pressed) return;
+    start(false, cur);
+  }
+
+  el.addEventListener('pointerdown', down);
+  el.addEventListener('pointerup', up);
+  el.addEventListener('pointercancel', up);
+  el.addEventListener('pointerleave', up);
+  el.addEventListener('blur', up);
+  // 键盘触发（Space/Enter）没有坐标，也要当作按下/松手
+  el.addEventListener('keydown', function(e){
+    if(e.key === ' ' || e.key === 'Enter') down(e);
+  });
+  el.addEventListener('keyup', function(e){
+    if(e.key === ' ' || e.key === 'Enter') up();
+  });
+}
+function attachSpringAll(root){
+  var scope = root || document;
+  Array.prototype.forEach.call(
+    scope.querySelectorAll('button, .tab, .feat, .chat-card, .dp-cell, .cbtn, .btn'),
+    function(el){
+      if(el.id === 'dateBtn') return;         // 日期按钮自己按（要当形变源）
+      attachSpring(el);
+    }
+  );
+}
+function springOff(){
+  return window.matchMedia && window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+}
+
+/* ================= 记录卡片堆叠滚动（Stacked Card Scroll）=================
+   规格：references/interaction-patterns.md 第 9 条。
+   一切由真实 scrollTop 计算 → 天然可逆，不需要任何「进度状态变量」。
+   缩放/透明度都有下限（0.9 / 0.65），否则文字小到不可读、内容提前消失。 */
+var stackRaf = 0;
+function initStackScroll(){
+  var feed = $('chatFeed');
+  if(!feed) return;
+  if(feed._stackBound) return;
+  feed._stackBound = true;
+  // 必须 passive:true，滚动时不能让浏览器等我们
+  feed.addEventListener('scroll', function(){
+    if(stackRaf) return;
+    stackRaf = requestAnimationFrame(function(){ stackRaf = 0; updateStack(); });
+  }, { passive:true });
+}
+function updateStack(){
+  var feed = $('chatFeed');
+  if(!feed) return;
+  var cards = Array.prototype.slice.call(feed.querySelectorAll('.stack-card'));
+  if(cards.length < 2) return;
+  var noMotion = springOff();
+  var st = feed.scrollTop;
+  var H = cards[0].offsetHeight || 1;
+  var STICK = 12;      // 吸顶线：第一张卡贴顶的位置（与内联 top 阶梯首值一致）
+
+  for(var i=0;i<cards.length;i++){
+    var c = cards[i];
+    var top = parseFloat(c.style.top) || STICK;
+    // p = 这张卡「被顶住」的进度 0..1
+    var p = (st - (c.offsetTop - STICK) + (STICK - top)) / H;
+    if(p < 0) p = 0;
+    if(p > 1) p = 1;
+    if(noMotion){
+      c.style.transform = '';
+      c.style.opacity = '';
+      c.style.zIndex = '';
+      continue;
+    }
+    var sc = 1 - 0.10 * p;                       // 缩放下限 0.9
+    var ey = -6 * p;                             // 轻微上移，给「被压住」一点空间线索
+    var op = 1 - 0.35 * p;                       // 透明度下限 0.65
+    c.style.transform = 'translate3d(0,' + ey.toFixed(2) + 'px,0) scale(' + sc.toFixed(3) + ')';
+    c.style.opacity = op.toFixed(3);
+    c.style.zIndex = String(1000 - i * 10 - Math.round(p * 5));
+  }
+}
+/* 给卡片铺吸顶阶梯 + 统一高度，并补一个尾部留白 */
+function prepareStack(){
+  var feed = $('chatFeed');
+  if(!feed) return;
+  var cards = Array.prototype.slice.call(feed.querySelectorAll('.stack-card'));
+  if(!cards.length) return;
+  var STICK = 12;
+  // 每张都吸在同一条线上，靠 scale 递减体现层次（参考文档里实测通过的版本）
+  cards.forEach(function(c){ c.style.top = STICK + 'px'; });
+  updateStack();
+}
+
+/* ================= 日期按钮 + 月份选择（Trigger Morph）=================
+   规格：references/shape-and-text-motion.md 第 8 条「从按钮形变展开」。
+   要点：起点必须等于被点按钮的真实矩形（getBoundingClientRect 实时量，不硬编码）；
+   圆角与尺寸一起插值（胶囊 999px → 面板圆角）；内容延迟淡入（约 60% 才开始显示），
+   否则文字会被拉伸变形；关闭时原路收回，不滑出屏幕。 */
+var dpYm = null;          // 面板当前显示的年月（null = 跟随当前页面）
+var dpAnim = null;
+
+function updateDateLabel(){
+  var el = $('dateLabel');
+  if(!el) return;
+  var ym = (curPage==='stats') ? statYm : (curPage==='list' ? listYm : curMonthYm());
+  el.textContent = ym.replace('-', ' 年 ') + ' 月';
+}
+function curMonthYm(){
+  var d = new Date();
+  return d.getFullYear() + '-' + pad(d.getMonth()+1);
+}
+function openDatePanel(){
+  var btn = $('dateBtn'), panel = $('dpPanel'), mask = $('dpMask'), inner = $('dpInner');
+  if(!btn || !panel || dpAnim) return;
+
+  var activeYm = (curPage==='stats') ? statYm : (curPage==='list' ? listYm : curMonthYm());
+  dpYm = activeYm;
+  renderDpGrid();
+
+  var r = btn.getBoundingClientRect();
+  var pad = 12;
+  var endW = Math.min(window.innerWidth - pad*2, 340);
+  var endH = 300;
+  var endX = (window.innerWidth - endW) / 2;
+  // 面板贴着按钮往下长
+  var endY = r.bottom + 8;
+  if(endY + endH > window.innerHeight - 20) endY = Math.max(pad, window.innerHeight - 20 - endH);
+
+  panel.classList.add('show');
+  panel.style.display = 'block';
+  panel.style.left = endX + 'px';
+  panel.style.top = endY + 'px';
+  panel.style.width = endW + 'px';
+  panel.style.height = endH + 'px';
+
+  mask.classList.add('show');
+
+  // 从按钮的真实矩形 → 面板矩形；圆角同步插值
+  var fromR = '999px';
+  var toR = '24px';
+  var anim = panel.animate([
+    { left:r.left + 'px', top:r.top + 'px', width:r.width + 'px', height:r.height + 'px',
+      borderRadius:fromR, easing:'cubic-bezier(.22,.9,.24,1)' },
+    { left:endX + 'px', top:endY + 'px', width:endW + 'px', height:endH + 'px',
+      borderRadius:toR }
+  ], { duration: 620, fill: 'both', easing: 'cubic-bezier(.22,.9,.24,1)' });
+
+  // 内容延迟淡入：长到约 60% 才出现，避免文字被拉伸
+  inner.animate([
+    { opacity:0, offset:0 },
+    { opacity:0, offset:.62 },
+    { opacity:1, offset:1 }
+  ], { duration: 620, fill: 'both' });
+
+  dpAnim = anim;
+  anim.onfinish = function(){ dpAnim = null; };
+}
+function closeDatePanel(){
+  var panel = $('dpPanel'), mask = $('dpMask'), inner = $('dpInner'), btn = $('dateBtn');
+  if(!panel || !panel.classList.contains('show')) return;
+  var r = btn.getBoundingClientRect();
+  try{
+    inner.animate([{opacity:1},{opacity:0}], {duration:220, fill:'both'});
+    panel.animate([
+      { left:panel.style.left, top:panel.style.top, width:panel.style.width, height:panel.style.height, borderRadius:'24px' },
+      { left:r.left+'px', top:r.top+'px', width:r.width+'px', height:r.height+'px', borderRadius:'999px' }
+    ], { duration:420, fill:'both', easing:'cubic-bezier(.4,0,.7,.3)' }).onfinish = function(){
+      panel.classList.remove('show');
+      panel.style.display = 'none';
+      mask.classList.remove('show');
+      dpAnim = null;
+    };
+  }catch(e){
+    panel.classList.remove('show');
+    panel.style.display = 'none';
+    mask.classList.remove('show');
+    dpAnim = null;
+  }
+}
+function renderDpGrid(){
+  var grid = $('dpGrid'), yearEl = $('dpYear');
+  if(!grid) return;
+  var y = Number((dpYm||curMonthYm()).slice(0,4));
+  yearEl.textContent = y + ' 年';
+  var activeYm = (curPage==='stats') ? statYm : (curPage==='list' ? listYm : curMonthYm());
+  var nowYm = curMonthYm();
+  var html = '';
+  for(var m=1;m<=12;m++){
+    var ym = y + '-' + pad(m);
+    var cls = 'dp-cell' + (ym===activeYm ? ' on' : '') + (ym>nowYm ? ' future' : '');
+    html += '<button class="'+cls+'" data-ym="'+ym+'">'+m+' 月</button>';
+  }
+  grid.innerHTML = html;
+  Array.prototype.forEach.call(grid.querySelectorAll('.dp-cell'), function(b){
+    attachSpring(b);
+    b.addEventListener('click', function(){
+      var ym = b.getAttribute('data-ym');
+      if(curPage==='stats'){ statYm = ym; }
+      else if(curPage==='list'){ listYm = ym; }
+      else { listYm = ym; }
+      updateDateLabel();
+      renderAll();
+      closeDatePanel();
+    });
+  });
+}
+function shiftYear(delta){
+  var y = Number((dpYm||curMonthYm()).slice(0,4)) + delta;
+  dpYm = y + '-01';
+  renderDpGrid();
+}
+
+function bindDayPicker(){
+  var btn = $('dateBtn'), mask = $('dpMask');
+  if(!btn) return;
+  attachSpring(btn, { scale:0.94 });
+  btn.addEventListener('click', function(){
+    var p = $('dpPanel');
+    if(p && p.classList.contains('show')) closeDatePanel();
+    else openDatePanel();
+  });
+  mask.addEventListener('click', closeDatePanel);
+  $('dpPrevY').addEventListener('click', function(){ shiftYear(-1); });
+  $('dpNextY').addEventListener('click', function(){ shiftYear(1); });
+  $('dpToday').addEventListener('click', function(){
+    var ym = curMonthYm();
+    if(curPage==='stats') statYm = ym; else listYm = ym;
+    updateDateLabel();
+    renderAll();
+    closeDatePanel();
+  });
+}
+
 function bind(){
   Array.prototype.forEach.call(document.querySelectorAll('nav.tabbar .tab'), function(t){
     t.addEventListener('click', function(){ showPage(t.getAttribute('data-page')); });
@@ -2260,32 +2609,24 @@ function bind(){
     f.addEventListener('click', function(){
       var a = f.getAttribute('data-act');
       if(a==='cats') openCats();
-      else if(a==='recurring') openRecurring();
-      else if(a==='budget') openBudget();
       else if(a==='sync') openSync();
       else if(a==='about') openAbout();
-      else if(a==='share') shareApp();
       else if(a==='export') exportJson();
       else if(a==='update') checkUpdate();
     });
   });
-  // 月份切换：账本页改 listYm，统计页改 statYm
-  function shiftMonth(delta){
-    var cur = (curPage==='stats') ? statYm : listYm;
-    var y = Number(cur.slice(0,4)), m = Number(cur.slice(5,7)) + delta;
-    if(m<1){ m=12; y--; }
-    if(m>12){ m=1; y++; }
-    var next = y+'-'+pad(m);
-    if(curPage==='stats'){ statYm = next; renderStats(); }
-    else { listYm = next; renderList(); }
-  }
-  $('mPrev').onclick = function(){ shiftMonth(-1); };
-  $('mNext').onclick = function(){ shiftMonth(1); };
+  // 月份切换改由顶栏日期按钮的展开面板负责（见 bindDayPicker）
   $('chatSend').onclick = sendChat;
   $('chatInput').onkeydown = function(e){ if(e.key==='Enter'){ e.preventDefault(); sendChat(); } };
   $('btnQuickEx').onclick = function(){ setChatType('expense'); };
   $('btnQuickIn').onclick = function(){ setChatType('income'); };
   $('btnSetBudget').onclick = openBudget;
+  // 顶栏日期按钮 + 月份面板
+  bindDayPicker();
+  // 全站按钮挂弹簧按压回弹（之后动态生成的按钮各自在渲染时挂）
+  attachSpringAll(document);
+  window.addEventListener('resize', function(){ updateStack(); });
+  window.addEventListener('orientationchange', function(){ setTimeout(updateStack, 160); });
   $('mask').addEventListener('click', function(e){ if(e.target===$('mask')) closeSheet(); });
   window.addEventListener('online', function(){ sync(false); });
   document.addEventListener('visibilitychange', function(){
