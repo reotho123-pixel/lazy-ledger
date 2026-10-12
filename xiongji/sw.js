@@ -8,7 +8,7 @@
  * Pages use network-first because cache-first makes users stay on stale versions,
  * especially on iOS home-screen apps where the SW update check rarely fires.
  */
-var CACHE = 'xiongji-v4';
+var CACHE = 'xiongji-v5';
 var BEARS = [
   './bears/b1_faq.png', './bears/b2_info.png', './bears/b3_wave.png', './bears/b4_panda.png',
   './bears/i-canyin.png', './bears/i-gouwu.png', './bears/i-jiaotong.png', './bears/i-juzhu.png',
