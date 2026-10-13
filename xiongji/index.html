@@ -38,18 +38,29 @@
      viewport 的 user-scalable=no 在 iOS 上会被忽略，touch-action 才管用；
      双击放大也用这条压掉（别用 touchend preventDefault，会吃掉 click）。 */
   html,body{touch-action:pan-x pan-y; overscroll-behavior:none;}
-  /* ⚠️底部那条「预留区」——两个版本的经验都留在这里，别再走弯路：
-     iOS 独立 App 模式下，屏幕最底约 62pt 是系统预留区（Home Indicator / 工具栏位置），
-     网页画不到那里，由系统取「页面底色」填色。
-     · v1.0.x 的底栏是「贴底白条」→ 需要让预留区也是白的，所以当时把 body 底色、
-       theme-color、manifest 全改成 #FFFFFF（页面薄荷改用 background-image 画）。
-     · v1.1.0 起底栏改成「浮动胶囊」（离屏底 10px，四周露出页面背景）→ 预留区本来就该
-       是页面色，于是把上面那些颜色全部改回页面纸色 #B5DEE6，与页面无缝。
-     结论：**预留区颜色要跟「紧贴屏幕底部那块东西」一致**。底栏贴底就跟随底栏色，
-     底栏浮动就跟随页面色。改底栏形态时记得一起复查这四个值：
-     body background-color / meta theme-color / manifest theme_color / background_color。
+  /* ⚠️底部那条「色块」的真相与修法（v1.1.2 定稿，别再走弯路）
+     现象：屏幕最底约 50pt 是一块**没有圆点的纯色**，与上面带圆点的页面拼在一起，
+     看着像一块异色方块。
+     成因：圆点底纹原来画在 `body` 的 background-image 上，而 `body` 的高度
+     （= JS 写入的 --app-h = window.innerHeight）比画布矮约 50pt；露出来的那段
+     只剩 `html` 的纯 background-color，所以**有颜色、没有圆点**。
+     结论：底纹必须画在**画布层（html）**上，才能铺满整屏。
+     修法：
+       ① 圆点 + 薄荷渐变两层背景图移到 `html`（根元素背景会传播到整个画布）；
+       ② `body` 保持 transparent，绝不在这里写背景色；
+       ③ `background-color` / theme-color / manifest 两色保持页面纸色 #B5DEE6。
+     ⚠️ 如果以后又把底栏改成「贴底白条」，记得把这四个颜色一起换成白色（见 git 历史 v1.0.2）。
      ⚠️ manifest 的颜色是「加到主屏时」缓存的，改完必须删掉主屏图标重新添加才生效。 */
-  html{-webkit-text-size-adjust:100%; overflow-anchor:none; height:100%; overflow:hidden; background:#B5DEE6;}
+  html{
+    -webkit-text-size-adjust:100%; overflow-anchor:none; height:100%; overflow:hidden;
+    /* 底纹画在画布层：这样连 body 之外的那段也一起铺满，不会露纯色块 */
+    background-color:var(--paper);
+    background-image:
+      radial-gradient(#FFFFFF 2.2px, transparent 2.5px),
+      linear-gradient(var(--paper), var(--paper));
+    background-size:14px 14px, 100% 100%;
+    background-repeat:repeat, no-repeat;
+  }
   /* 三段式布局：标题 / 内容区（独立滚动）/ 输入栏 / 任务栏
      高度策略（按可靠性排序，JS 会覆盖成精确像素值）：
        1) JS 读 window.innerHeight 写进 --app-h（最准，iOS 独立 App 也准）
@@ -59,17 +70,8 @@
     height:100%;
     height:var(--app-h, 100%);
     margin:0; color:var(--ink);
-    /* 底色 = 页面纸色（薄荷蓝）。
-       ⚠️ 这个值会让系统拿去填屏幕最底那条约 62pt 的预留区（网页画不到那里）。
-       之前为了让白底栏与那条无缝相接，这里曾改成白色；现在底栏改成了「浮动胶囊」，
-       四周本就该露出页面背景，所以改回薄荷 —— 那条预留区与页面同色，看不出断层。
-       薄荷蓝 + 白圆点仍用背景图两层画（见下）。 */
-    background-color:var(--paper);
-    background-image:
-      radial-gradient(#FFFFFF 2.2px, transparent 2.5px),
-      linear-gradient(var(--paper), var(--paper));
-    background-size:14px 14px, 100% 100%;
-    background-repeat:repeat, no-repeat;
+    /* 保持透明：底纹在 html（画布层），这里再写一层会把圆点盖住 */
+    background:transparent;
     font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
     line-height:1.45;
     font-weight:600;
@@ -104,7 +106,6 @@
     background:var(--paper2); border-radius:999px; box-shadow:var(--sh-sm);
     padding:9px 20px 9px 15px; display:flex; align-items:center; gap:8px;
     font-size:15px; font-weight:800; color:var(--ink); letter-spacing:.5px;
-    will-change:transform;
   }
   .date-chip .date-text{white-space:nowrap;}
   /* 日期上的熊贴纸（轻微倾斜，像贴纸贴上去） */
@@ -450,7 +451,9 @@
     display:flex; flex-direction:column; align-items:center; gap:4px;
     font-size:11.5px; font-weight:800; color:var(--nav-idle);
     transition:color .22s ease;
-    will-change:transform;
+    /* ⚠️ 不要在这里写 will-change:transform —— 4 个 tab 各提升一个图层，
+       叠加胶囊自己共 5 个合成层，iOS 上会拖慢并留下残影。
+       图层提升只在按压期间由 .spring 内部临时加（见 attachSpring）。 */
   }
   /* 图标放大（用户要求） */
   nav.tabbar .tab .ti{height:27px; line-height:1; display:flex; align-items:center; justify-content:center;}
@@ -459,15 +462,22 @@
   /* 选中态：颜色由 .nav-pill 那块滑动背景负责，这里只把文字/图标提亮 */
   nav.tabbar .tab.on{background:none; color:var(--pink);}
 
-  /* 滑动胶囊：绝对定位，位置/尺寸由 JS 量出来后动画过去。
-     放在 .tab 之下（z-index:0），所以文字和图标仍浮在上面。 */
+  /* 滑动胶囊。
+     ⚠️ 残影/卡顿的根因（v1.1.2 修）：原来对 transform + width + height 三个属性
+     做过渡，其中 width/height 属于布局属性，每帧触发重排（layout），
+     在 iOS 上表现为掉帧 + 上一次的位置留下残影。
+     正解：**尺寸不进过渡，只用 transform 做位移**——
+       ① 胶囊尺寸在点击瞬间直接写死（不参与动画）；
+       ② 位移用 translate3d（走合成层，不重排）；
+       ③ 宽度变化改为 `scaleX` 会拉伸圆角，所以这里改用「固定最大宽度 + translate」，
+          胶囊尺寸按最宽的 tab 一次性定好，视觉上仍是圆角胶囊。 */
   nav.tabbar .nav-pill{
-    position:absolute; left:0; top:0; width:0; height:0;
+    position:absolute; left:0; top:0;
     background:var(--paper); border-radius:999px;
     pointer-events:none; z-index:0;
-    transition:transform .3s cubic-bezier(.34,1.15,.64,1),
-               width .3s cubic-bezier(.34,1.15,.64,1),
-               height .3s cubic-bezier(.34,1.15,.64,1);
+    transform:translate3d(0,0,0);
+    transition:transform .32s cubic-bezier(.22,.9,.24,1);
+    will-change:transform;
   }
   /* 减弱动效偏好：直接跳，不做滑动 */
   @media(prefers-reduced-motion:reduce){
@@ -597,8 +607,11 @@
        · 松手回到 1 并过冲约 +2.5%，欠阻尼（k=380/d=12）—— 这才是回弹
        · 按住时叠一层 12% 暗色
        · 形变只作用在按钮自身（scale 等比，不会压变文字）
-     由 JS 用同一弹簧值驱动 transform 与遮罩，两个属性不脱节。 */
-  .spring{position:relative; will-change:transform;}
+     由 JS 用同一弹簧值驱动 transform 与遮罩，两个属性不脱节。
+     ⚠️ will-change 只在按压期间临时加（.pressing），松手就撤 ——
+        常驻会让几十个按钮各自提升一个合成层，iOS 上明显掉帧、还会留残影。 */
+  .spring{position:relative;}
+  .spring.pressing{will-change:transform;}
   .spring::after{
     content:''; position:absolute; inset:0; border-radius:inherit;
     background:#000; opacity:0; pointer-events:none;
@@ -783,7 +796,7 @@
       <div class="feat" data-act="about">
         <div class="ic"><img src="bears/b4_panda.png" alt=""></div>
         <div class="n">关于</div>
-        <div class="d" id="featVer">v1.1.1</div>
+        <div class="d" id="featVer">v1.1.2</div>
       </div>
       <div class="feat" data-act="update">
         <div class="ic"><img src="bears/b3_wave.png" alt=""></div>
@@ -1365,11 +1378,13 @@ var PAGE_META = {
 var curPage='chat';
 
 /* 把滑动胶囊对齐到当前选中的 Tab。
-   animate=false 时（首次落位 / 布局变化）直接到位，不做过渡。
-   注意两个坑：
-     1. absolute 定位的原点是 padding box，而 getBoundingClientRect 给的是 border box，
-        要减掉边框宽度，否则整体偏移。
-     2. 首次落位必须先关过渡、强制回流、再恢复，否则会看到胶囊从左上角飞过来。 */
+   ⚠️ 性能要点（v1.1.2 修残影/卡顿）：
+     只对 transform 做过渡 —— width/height 是布局属性，每帧触发重排，
+     iOS 上会掉帧并留下残影。所以：
+       · 胶囊的宽高**只量一次**（首屏 + resize），之后取四个 tab 的并集尺寸，
+         尺寸不再参与动画；
+       · 每次切换只用 translate3d 移动，纯合成层操作。
+   animate=false 时直接落位（首次 / 布局变化），不动画。 */
 function syncNavPill(animate){
   var outer = document.querySelector('nav.tabbar');
   if(!outer) return;
@@ -1377,26 +1392,39 @@ function syncNavPill(animate){
   var on = outer.querySelector('.tab.on');
   if(!pill || !on) return;
 
+  var tabs = outer.querySelectorAll('.tab');
+
+  // ① 尺寸：取所有 tab 的并集（一次量准，之后不再改）
+  var maxW = 0, maxH = 0;
+  Array.prototype.forEach.call(tabs, function(t){
+    if(t.offsetWidth > maxW) maxW = t.offsetWidth;
+    if(t.offsetHeight > maxH) maxH = t.offsetHeight;
+  });
+  if(maxW > 0 && pill._w !== maxW){
+    pill._w = maxW;
+    pill.style.width = maxW + 'px';
+  }
+  if(maxH > 0 && pill._h !== maxH){
+    pill._h = maxH;
+    pill.style.height = maxH + 'px';
+  }
+
+  // ② 位置：只用 transform 位移，宽度比 tab 宽的那部分居中抵消
   var or = outer.getBoundingClientRect();
   var nr = on.getBoundingClientRect();
-  var w = nr.width, h = nr.height;
-  var x = nr.left - or.left - outer.clientLeft;
-  var y = nr.top - or.top - outer.clientTop;
+  var x = nr.left - or.left - outer.clientLeft + (nr.width - maxW) / 2;
+  var y = nr.top - or.top - outer.clientTop + (nr.height - maxH) / 2;
 
   var first = pill.dataset.placed !== '1';
   if(first || !animate){
     pill.style.transition = 'none';
-    pill.style.width = w + 'px';
-    pill.style.height = h + 'px';
-    pill.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+    pill.style.transform = 'translate3d(' + x + 'px,' + y + 'px,0)';
     void pill.offsetWidth;   // 强制回流后再恢复过渡，否则这次的 none 会被下一次覆盖
     pill.style.transition = '';
     pill.dataset.placed = '1';
     return;
   }
-  pill.style.width = w + 'px';
-  pill.style.height = h + 'px';
-  pill.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+  pill.style.transform = 'translate3d(' + x + 'px,' + y + 'px,0)';
 }
 
 function showPage(name){
@@ -2247,7 +2275,7 @@ function shareApp(){
   }
 }
 /* 静默检查线上版本；有新版本就提示一下，不强制刷新 */
-var VER = 'v1.1.1';
+var VER = 'v1.1.2';
 var updateNotified = false;
 function autoCheckUpdate(){
   if(updateNotified || !navigator.onLine) return;
@@ -2355,14 +2383,26 @@ function attachSpring(el, opts){
     if(settled){
       cur = target; vel = 0; last = 0;
       el._springV = cur;
-      el.style.transform = 'scale(' + cur + ')';
-      shade.style.opacity = (pressed ? '0.12' : '0');
+      // 落定后把 transform 整个撤掉（回到 1 时不写缩放），并撤掉图层提升 ——
+      // 否则几十个按钮各留一个合成层，iOS 上会掉帧、长按还会留残影
+      if(pressed){
+        el.style.transform = 'scale(' + to + ')';
+        shade.style.opacity = '0.12';
+        el.classList.add('pressing');
+      } else {
+        el.style.transform = '';
+        el._springV = 0;
+        shade.style.opacity = '0';
+        el.classList.remove('pressing');
+      }
       return;
     }
     raf = requestAnimationFrame(tick);
   }
   function start(p, v){
     stop(); pressed = p; cur = v; vel = 0; last = 0;
+    // 图层提升只在动画期间加
+    el.classList.add('pressing');
     raf = requestAnimationFrame(tick);
   }
   function down(e){
