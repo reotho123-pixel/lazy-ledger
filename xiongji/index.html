@@ -38,23 +38,28 @@
      viewport 的 user-scalable=no 在 iOS 上会被忽略，touch-action 才管用；
      双击放大也用这条压掉（别用 touchend preventDefault，会吃掉 click）。 */
   html,body{touch-action:pan-x pan-y; overscroll-behavior:none;}
-  /* 底部背景：直接画在 body 自己身上（照同居食谱 chishenme 的写法）。
-     2026-10-13 决定性实验推翻了之前所有关于「底部 47pt 画不进去」的猜测：
-     在主屏独立 App 模式下画一条 14px 纯红贴住 body 底边，
-     截图量得红条 y=2490~2531 一直画到屏幕最底线、全程 585/585 像素无缺口
-     → 屏幕最底完全能画，那 47px 只是「屏幕物理高 − 可视高」，不是不可绘制区。
-     之前反复失败的真因是「波点层没铺到那儿」：
-     body::before 用 z-index:-1 会排到 html 背景之下，底部空白处就被 html 底色盖住只剩纯色。
-     正解 = 让波点成为 body 自己的 background（最朴素、最可靠，无层叠问题）。 */
+  /* ⚠️底部那条约 47pt 的纯色带——**三条证据证明是 iOS 系统画的，网页画不进去**
+     （2026-10-13 第 4 轮，做完实验才定论，别再走弯路）
+     证据：
+       ① 那条带【整行 0 个白像素】；而页面中凡网页绘制的区域都有波点。
+       ② 那条带的颜色**严格跟随 manifest 的 background_color**，不跟页面走：
+          v1.0.2 时 manifest=白 → 那条是白(255,255,255)；
+          v1.1.4 时 manifest=薄荷 → 那条是薄荷(181,222,230)；
+          而页面本身两个版本都是薄荷 → 它不是网页画的。
+       ③ 实验：把 `html` 高度强行压到 600px（= 视口底往上 244px），
+          **底部那 244px 里波点依旧完整**（每 40px 就测到 dots=2~4）
+          → 证明「波点画在 html 上」本身没问题、能铺满整个画布；
+          既然画布内没问题，剩下那条就只能是**画布之外**（视口之外）。
+     成因：独立 App 下网页视口比屏幕矮约 47pt（实测：胶囊 CSS `bottom:10px`，
+     截图量得胶囊下缘距屏幕底 57pt ⇒ 视口底边距屏幕底约 47pt），
+     那 47pt 是 iOS 的窗口背景区，网页渲染不到，只能由系统按 manifest 背景色填充。
+     ✅ 交付做法：画不进去就让它**无缝**。让波点在视口底部平滑淡出，
+     使页面最底一段与那条系统色带完全同色、看不出接缝 —— 视觉上就是整屏一块背景。
+     淡出 64px：绝大部分被浮动胶囊遮住，只在两侧留白露一点很柔的过渡。 */
   html{
     -webkit-text-size-adjust:100%; overflow-anchor:none; height:100%; overflow:hidden;
+    /* 画布底色 = 页面纸色（系统画那条带时取的就是这个值） */
     background-color:var(--paper);
-    /* 波点也画在 html 上：根元素的背景会传播到整个画布(canvas)，
-       铺满 body 盒子之外那段（iOS 独立 App 下 body 可能比可视区矮约 47pt）。
-       与 body 上的同参数波点同原点、同网格，叠加完全对齐，视觉无差别。 */
-    background-image:radial-gradient(#FFFFFF 2.2px, transparent 2.5px);
-    background-size:14px 14px;
-    background-repeat:repeat;
   }
   /* 三段式布局：标题 / 内容区（独立滚动）/ 输入栏 / 任务栏
      高度策略（按可靠性排序，JS 会覆盖成精确像素值）：
@@ -65,17 +70,29 @@
     height:100%;
     height:var(--app-h, 100%);
     margin:0; color:var(--ink);
-    /* 底色 + 波点都画在 body 自身背景上：随 body 高度铺满，不依赖任何层叠顺序 */
-    background-color:var(--paper);
-    background-image:radial-gradient(#FFFFFF 2.2px, transparent 2.5px);
-    background-size:14px 14px;
-    background-repeat:repeat;
+    /* 保持透明：底色在 html，波点在下面的 ::before 层 */
+    background:transparent;
     font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
     line-height:1.45;
     font-weight:600;
     display:flex; flex-direction:column;
     overflow:hidden;
     overflow-anchor:none;
+  }
+  /* 波点层：固定铺满视口；最底部 80px 渐隐。
+     为什么要渐隐：屏幕最底约 47pt 是 iOS 的窗口背景区（网页画不进去，见上面注释），
+     它按 manifest 背景色填成纯薄荷。若波点在视口底部硬切，那条「有波点 → 没波点」
+     的横线会很扎眼；渐隐让波点柔和收掉，与那条纯色无缝相接。
+     80px ≈ 27pt，大部分被浮动胶囊挡着，只在两侧留白露一点过渡。
+     ⚠️ 不要加大这个值：v1.1.3 用过 170px，结果制造了一大片没波点的区域。 */
+  body::before{
+    content:''; position:fixed; left:0; right:0; top:0; bottom:0;
+    z-index:-1; pointer-events:none;
+    background-image:radial-gradient(#FFFFFF 2.2px, transparent 2.5px);
+    background-size:14px 14px;
+    background-repeat:repeat;
+    -webkit-mask-image:linear-gradient(to bottom, #000 calc(100% - 80px), transparent 100%);
+    mask-image:linear-gradient(to bottom, #000 calc(100% - 80px), transparent 100%);
   }
   /* 金额 / 统计数字：等宽对齐 + 紧字距 */
   .big-amt,.cc-amt,.rec-amt,.sum-card .amt,.st-hero .big,.cell .v,
