@@ -38,26 +38,23 @@
      viewport 的 user-scalable=no 在 iOS 上会被忽略，touch-action 才管用；
      双击放大也用这条压掉（别用 touchend preventDefault，会吃掉 click）。 */
   html,body{touch-action:pan-x pan-y; overscroll-behavior:none;}
-  /* ⚠️底部那条「色块」的真相与最终修法（v1.1.3 定稿，别再走弯路）
-     现象：屏幕最底约 48pt 是一块**没有圆点的纯色**，与上面带圆点的页面拼在一起，
-     边界肉眼可见，看着就是"没铺满 / 有块异色"。
-     真相（两步才查清）：
-       ① 那不是绘制错误 —— iOS 独立 App 模式下**网页视口本身就比屏幕矮约 48pt**
-          （屏幕最底留给 Home Indicator，网页画不到那儿），由系统用页面底色填那条。
-          实测：网页里 `window.innerHeight` 与屏幕高度差约 48pt，且 body 高度=视口高度、
-          两者之间没有间隙 —— 所以那块**不可能靠调 CSS 高度画到**。
-       ② 唯一能做的：让**点纹在视口底部自然淡出**，这样视口内最后一段已经是纯纸色，
-          与外面那条纯纸色**同色无缝**，边界就消失了。
-     实现：
-       · html 只放**纯纸色**（系统填那条用的就是这个值，也是底色兜底）
-       · 点纹单独放 body::before（fixed 铺满视口），用 mask 在底部 96px 内渐隐
-       · body 本身保持 transparent
-     ⚠️ 若以后把底栏改回「贴底白条」，这四个值要一起换成白色：
-        html 底色 / meta theme-color / manifest theme_color / background_color。
+  /* ⚠️「底部一块没有波点的纯色」——真因与修法（v1.1.4 定稿）
+     现象：屏幕最底约 50pt 是纯薄荷色、没有白波点，与上面的点纹拼在一起像一块异色。
+     真因（量用户真机截图才确认）：`--app-h`（= window.innerHeight）在 iOS 独立 App 下
+     **报小了约 50pt**，于是 body 比视口矮一截；露出来的那一截显示的是 **html 的背景**。
+     之前几版 html 只给了纯 background-color（没有点纹）→ 那一截自然没有波点。
+     修法：**把波点画在 html（画布层）上** —— 根元素的背景会铺到整个画布，
+     连 body 之外那一截也一起带上波点，整屏点纹连续。
+     （教训：不要再试图用「底部渐隐」掩盖——那只会把那一截的点纹也淡掉，更像色块。）
+     ⚠️ 底色/主题色仍要跟底栏形态一致：底栏贴底→跟随底栏色；底栏浮动→跟随页面色。
      ⚠️ manifest 的颜色是「加到主屏时」缓存的，改完必须删掉主屏图标重新添加才生效。 */
   html{
     -webkit-text-size-adjust:100%; overflow-anchor:none; height:100%; overflow:hidden;
+    /* 底色 + 波点一起画在画布层：整屏（含视口之外那条）都是连续的薄荷底纹 */
     background-color:var(--paper);
+    background-image:radial-gradient(#FFFFFF 2.2px, transparent 2.5px);
+    background-size:14px 14px;
+    background-repeat:repeat;
   }
   /* 三段式布局：标题 / 内容区（独立滚动）/ 输入栏 / 任务栏
      高度策略（按可靠性排序，JS 会覆盖成精确像素值）：
@@ -68,7 +65,7 @@
     height:100%;
     height:var(--app-h, 100%);
     margin:0; color:var(--ink);
-    /* 保持透明：点纹在下面的 ::before 里，底色在 html 上 */
+    /* 保持透明：底纹在 html（画布层）。body 若比视口矮，露出的那截也带波点 */
     background:transparent;
     font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
     line-height:1.45;
@@ -76,19 +73,6 @@
     display:flex; flex-direction:column;
     overflow:hidden;
     overflow-anchor:none;
-  }
-  /* 白圆点点纹：固定铺满视口，**底部渐隐**（关键）。
-     iOS 独立 App 下网页视口比屏幕矮约 48pt（最底那段留给 Home Indicator，网页画不到），
-     点纹在视口底部若直接截断，就会与外面那块纯色形成一条肉眼可见的横线。
-     所以让点纹在底部 170px 内平缓淡出：到视口最底时已接近全透明，
-     与外面同色的纸底无缝相接，整屏看起来就是铺满的。 */
-  body::before{
-    content:''; position:fixed; left:0; right:0; top:0; bottom:0;
-    z-index:-1; pointer-events:none;
-    background-image:radial-gradient(#FFFFFF 2.2px, transparent 2.5px);
-    background-size:14px 14px;
-    -webkit-mask-image:linear-gradient(to bottom, #000 calc(100% - 170px), transparent 100%);
-    mask-image:linear-gradient(to bottom, #000 calc(100% - 170px), transparent 100%);
   }
   /* 金额 / 统计数字：等宽对齐 + 紧字距 */
   .big-amt,.cc-amt,.rec-amt,.sum-card .amt,.st-hero .big,.cell .v,
@@ -807,7 +791,7 @@
       <div class="feat" data-act="about">
         <div class="ic"><img src="bears/b4_panda.png" alt=""></div>
         <div class="n">关于</div>
-        <div class="d" id="featVer">v1.1.3</div>
+        <div class="d" id="featVer">v1.1.4</div>
       </div>
       <div class="feat" data-act="update">
         <div class="ic"><img src="bears/b3_wave.png" alt=""></div>
@@ -2286,7 +2270,7 @@ function shareApp(){
   }
 }
 /* 静默检查线上版本；有新版本就提示一下，不强制刷新 */
-var VER = 'v1.1.3';
+var VER = 'v1.1.4';
 var updateNotified = false;
 function autoCheckUpdate(){
   if(updateNotified || !navigator.onLine) return;
