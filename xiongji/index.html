@@ -49,6 +49,12 @@
   html{
     -webkit-text-size-adjust:100%; overflow-anchor:none; height:100%; overflow:hidden;
     background-color:var(--paper);
+    /* 波点也画在 html 上：根元素的背景会传播到整个画布(canvas)，
+       铺满 body 盒子之外那段（iOS 独立 App 下 body 可能比可视区矮约 47pt）。
+       与 body 上的同参数波点同原点、同网格，叠加完全对齐，视觉无差别。 */
+    background-image:radial-gradient(#FFFFFF 2.2px, transparent 2.5px);
+    background-size:14px 14px;
+    background-repeat:repeat;
   }
   /* 三段式布局：标题 / 内容区（独立滚动）/ 输入栏 / 任务栏
      高度策略（按可靠性排序，JS 会覆盖成精确像素值）：
