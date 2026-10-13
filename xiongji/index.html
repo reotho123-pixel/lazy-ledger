@@ -38,28 +38,26 @@
      viewport 的 user-scalable=no 在 iOS 上会被忽略，touch-action 才管用；
      双击放大也用这条压掉（别用 touchend preventDefault，会吃掉 click）。 */
   html,body{touch-action:pan-x pan-y; overscroll-behavior:none;}
-  /* ⚠️底部那条「色块」的真相与修法（v1.1.2 定稿，别再走弯路）
-     现象：屏幕最底约 50pt 是一块**没有圆点的纯色**，与上面带圆点的页面拼在一起，
-     看着像一块异色方块。
-     成因：圆点底纹原来画在 `body` 的 background-image 上，而 `body` 的高度
-     （= JS 写入的 --app-h = window.innerHeight）比画布矮约 50pt；露出来的那段
-     只剩 `html` 的纯 background-color，所以**有颜色、没有圆点**。
-     结论：底纹必须画在**画布层（html）**上，才能铺满整屏。
-     修法：
-       ① 圆点 + 薄荷渐变两层背景图移到 `html`（根元素背景会传播到整个画布）；
-       ② `body` 保持 transparent，绝不在这里写背景色；
-       ③ `background-color` / theme-color / manifest 两色保持页面纸色 #B5DEE6。
-     ⚠️ 如果以后又把底栏改成「贴底白条」，记得把这四个颜色一起换成白色（见 git 历史 v1.0.2）。
+  /* ⚠️底部那条「色块」的真相与最终修法（v1.1.3 定稿，别再走弯路）
+     现象：屏幕最底约 48pt 是一块**没有圆点的纯色**，与上面带圆点的页面拼在一起，
+     边界肉眼可见，看着就是"没铺满 / 有块异色"。
+     真相（两步才查清）：
+       ① 那不是绘制错误 —— iOS 独立 App 模式下**网页视口本身就比屏幕矮约 48pt**
+          （屏幕最底留给 Home Indicator，网页画不到那儿），由系统用页面底色填那条。
+          实测：网页里 `window.innerHeight` 与屏幕高度差约 48pt，且 body 高度=视口高度、
+          两者之间没有间隙 —— 所以那块**不可能靠调 CSS 高度画到**。
+       ② 唯一能做的：让**点纹在视口底部自然淡出**，这样视口内最后一段已经是纯纸色，
+          与外面那条纯纸色**同色无缝**，边界就消失了。
+     实现：
+       · html 只放**纯纸色**（系统填那条用的就是这个值，也是底色兜底）
+       · 点纹单独放 body::before（fixed 铺满视口），用 mask 在底部 96px 内渐隐
+       · body 本身保持 transparent
+     ⚠️ 若以后把底栏改回「贴底白条」，这四个值要一起换成白色：
+        html 底色 / meta theme-color / manifest theme_color / background_color。
      ⚠️ manifest 的颜色是「加到主屏时」缓存的，改完必须删掉主屏图标重新添加才生效。 */
   html{
     -webkit-text-size-adjust:100%; overflow-anchor:none; height:100%; overflow:hidden;
-    /* 底纹画在画布层：这样连 body 之外的那段也一起铺满，不会露纯色块 */
     background-color:var(--paper);
-    background-image:
-      radial-gradient(#FFFFFF 2.2px, transparent 2.5px),
-      linear-gradient(var(--paper), var(--paper));
-    background-size:14px 14px, 100% 100%;
-    background-repeat:repeat, no-repeat;
   }
   /* 三段式布局：标题 / 内容区（独立滚动）/ 输入栏 / 任务栏
      高度策略（按可靠性排序，JS 会覆盖成精确像素值）：
@@ -70,7 +68,7 @@
     height:100%;
     height:var(--app-h, 100%);
     margin:0; color:var(--ink);
-    /* 保持透明：底纹在 html（画布层），这里再写一层会把圆点盖住 */
+    /* 保持透明：点纹在下面的 ::before 里，底色在 html 上 */
     background:transparent;
     font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
     line-height:1.45;
@@ -78,6 +76,19 @@
     display:flex; flex-direction:column;
     overflow:hidden;
     overflow-anchor:none;
+  }
+  /* 白圆点点纹：固定铺满视口，**底部渐隐**（关键）。
+     iOS 独立 App 下网页视口比屏幕矮约 48pt（最底那段留给 Home Indicator，网页画不到），
+     点纹在视口底部若直接截断，就会与外面那块纯色形成一条肉眼可见的横线。
+     所以让点纹在底部 170px 内平缓淡出：到视口最底时已接近全透明，
+     与外面同色的纸底无缝相接，整屏看起来就是铺满的。 */
+  body::before{
+    content:''; position:fixed; left:0; right:0; top:0; bottom:0;
+    z-index:-1; pointer-events:none;
+    background-image:radial-gradient(#FFFFFF 2.2px, transparent 2.5px);
+    background-size:14px 14px;
+    -webkit-mask-image:linear-gradient(to bottom, #000 calc(100% - 170px), transparent 100%);
+    mask-image:linear-gradient(to bottom, #000 calc(100% - 170px), transparent 100%);
   }
   /* 金额 / 统计数字：等宽对齐 + 紧字距 */
   .big-amt,.cc-amt,.rec-amt,.sum-card .amt,.st-hero .big,.cell .v,
@@ -796,7 +807,7 @@
       <div class="feat" data-act="about">
         <div class="ic"><img src="bears/b4_panda.png" alt=""></div>
         <div class="n">关于</div>
-        <div class="d" id="featVer">v1.1.2</div>
+        <div class="d" id="featVer">v1.1.3</div>
       </div>
       <div class="feat" data-act="update">
         <div class="ic"><img src="bears/b3_wave.png" alt=""></div>
@@ -2275,7 +2286,7 @@ function shareApp(){
   }
 }
 /* 静默检查线上版本；有新版本就提示一下，不强制刷新 */
-var VER = 'v1.1.2';
+var VER = 'v1.1.3';
 var updateNotified = false;
 function autoCheckUpdate(){
   if(updateNotified || !navigator.onLine) return;
