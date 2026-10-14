@@ -65,15 +65,14 @@
      ② --app-h 万一比屏幕矮一点，露出来的也不会是透底/默认白。 */
   html{-webkit-text-size-adjust:100%; overflow-anchor:none; height:100%; overflow:hidden;
        background-color:var(--paper);}
-  /* 三段式布局：标题 / 内容区（独立滚动）/ 任务栏
-     高度用 100dvh —— 照搬「待会吃什么」：容器铺满可视区，
-     底栏作为 flex 的最后一格就自然落在屏幕底，不靠 JS 算高度、
-     也不用跟 safe-area 较劲。
-     （旧版用 JS 读 window.innerHeight 写 --app-h，那条路在 iOS 独立模式下
-       取到的高度和真实可视区对不齐，底栏就浮起来了。） */
+  /* 三段式布局：标题 / 内容区（独立滚动）/ 输入栏 / 任务栏
+     高度策略（按可靠性排序，JS 会覆盖成精确像素值）：
+       1) JS 读 window.innerHeight 写进 --app-h（最准，iOS 独立 App 也准）
+       2) 退回 height:100%（html 的高度 = 视口高度）
+     —— 不用 100vh/100dvh：iOS 独立 App 下会偏小导致底部留空、任务栏悬空 */
   body{
     height:100%;
-    height:100dvh;
+    height:var(--app-h, 100%);
     margin:0; background:var(--paper); color:var(--ink);
     /* 字体方案②：等宽收据风 —— 数字对齐，中文回退到苹方 */
     font-family:ui-monospace,"SF Mono",Menlo,Consolas,"PingFang SC","Heiti SC",monospace;
@@ -131,12 +130,12 @@
     padding:14px;
     position:relative;
   }
-  /* 对话页：绝对定位铺满内容区 —— 高度由 inset 决定。
-     底栏现在在文档流里（不在内容区之上），所以这里到内容区底边即可，不再扣除底栏高度。 */
+  /* 对话页：绝对定位铺满内容区 —— 高度由 inset 决定，
+     不依赖 100% / 100vh / 100dvh（这些在 iOS 独立 App 下都不可靠） */
   #page-chat.active{
     position:absolute;
     top:14px; left:14px; right:14px;
-    bottom:14px;
+    bottom:calc(var(--tab-h, 92px) + 6px);
     display:flex; flex-direction:column;
     overflow:hidden;
   }
@@ -145,9 +144,9 @@
   #page-chat #chatFeed{flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;}
   .page{display:none;}
   .page.active{display:block;}
-  /* 底栏在文档流里，不再遮住内容 —— 不需要给它预留高度 */
+  /* 非对话页：底部留出任务栏高度，内容不被 Fixed 任务栏遮住 */
   #page-list.active, #page-stats.active, #page-me.active{
-    padding-bottom:0;
+    padding-bottom:calc(var(--tab-h, 92px) + 6px);
   }
 
   /* ---------- 对话页 ---------- */
@@ -324,15 +323,13 @@
   .foot-note{font-size:12.5px; font-weight:700; color:#5a5344; padding:2px 2px 6px;}
 
   /* ---------- 底栏 ---------- */
-  /* 照搬「待会吃什么」：**不做浮动层**，而是 flex 布局的最后一格（flex:0 0 auto）。
-     容器 body 是 100dvh 的竖向 flex，内容区 main 用 flex:1 占满剩余空间，
-     底栏紧贴在它下面 —— 位置由容器高度决定，容器满屏就必然贴底。
-     这比 position:fixed 可靠：fixed 是相对"视口"定位，而 iOS 独立模式下
-     视口和真实屏幕底之间还有一段系统区，底栏就会浮在那上面。
-     底部内边距也写死，不叠加 env(safe-area-inset-bottom)——那会在
-     已经含安全区的可视区里再留一遍，实测文字下方多出约 40px。 */
+  /* fixed + bottom:0 贴屏幕最底。
+     底部内边距**写死 13px**，不叠加 env(safe-area-inset-bottom)：
+     iOS 加到主屏后可视区已经铺满整屏（含 Home Indicator 那段），再按 safe-area
+     补一次就是留了两遍 —— 实测文字下方会比预期多出约 34px，任务栏看着被顶上去。
+     参照「待会吃什么」的底栏：文字下方只留 13px。 */
   nav.tabbar{
-    flex:0 0 auto; position:relative; z-index:40;
+    position:fixed; left:0; right:0; bottom:0; z-index:40;
     background:var(--paper); border-top:var(--bd);
     padding:8px 8px 13px;
     display:flex; gap:6px;
@@ -443,8 +440,7 @@
   .badge.p{background:var(--pink);}
 
   #toast{
-    /* 底栏已在文档流里、占掉屏幕底部约 60px，提示条抬到它上方 */
-    position:fixed; left:50%; bottom:calc(var(--tab-h, 78px) + 20px);
+    position:fixed; left:50%; bottom:calc(var(--tabbar-h) + 26px);
     transform:translateX(-50%) translateY(10px); z-index:90; opacity:0; pointer-events:none;
     background:var(--ink); color:#fff; font-size:14px; font-weight:900; padding:11px 20px;
     border:var(--bd); box-shadow:var(--sh-sm); max-width:86vw; text-align:center;
