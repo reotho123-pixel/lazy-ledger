@@ -135,32 +135,45 @@ header{
 .nav-btn:active{transform:scale(.94);}
 .ym-label{font-size:14px; padding:0 2px; white-space:nowrap;}
 
-/* ---------- 内容区 ---------- */
+/* ---------- 内容区 ----------
+   ⚠️ 顶部内边距是给「探出卡片外的装饰」留的空间，别改小。
+   两处探出量（实测值，改尺寸或角度要重算）：
+     · 胶带 58×21 旋转 -38° → 旋转后的绘制框比布局盒高 15.6px，
+       加上 top:-11px，实际探出卡外 **26.6px**（不是 11px）
+     · 统计卡的熊 top:-52px → 探出 **52px**
+   本容器 overflow-y:auto 会把超出的部分直接裁掉（熊头被切掉就是这个原因）。 */
 main{
   position:relative; z-index:10; flex:1 1 auto; min-height:0;
   overflow-y:auto; -webkit-overflow-scrolling:touch;
   max-width:660px; width:100%; margin:0 auto;
-  /* 顶部 14px 给探出卡外的胶带留位置，别改成 0 */
-  padding:14px 12px 12px;
+  padding:30px 12px 12px;
 }
 main::-webkit-scrollbar{width:0;}
 .page{display:none;}
 .page.active{display:block;}
 
 /* 记录页要三段固定（主卡 / 输入区 / 卡片流），单独用绝对定位铺满，
-   高度由 inset 决定，不依赖 100vh（iOS 独立 App 下 100vh 会偏小）。 */
+   高度由 inset 决定，不依赖 100vh（iOS 独立 App 下 100vh 会偏小）。
+   ⚠️ 这里不能有 overflow:hidden —— 主卡的熊 top:-56px、胶带探出 26.6px，
+   这一层一裁，熊的头和胶带就没了（.feed 自己会滚，不需要这层再裁）。 */
 #page-record.active{
   position:absolute; z-index:10;
   top:calc(var(--head-h,52px) + 8px); left:12px; right:12px;
   bottom:calc(var(--tab-h,64px) + 8px);
-  display:flex; flex-direction:column; overflow:hidden;
+  display:flex; flex-direction:column;
   padding:0; max-width:none; margin:0;
 }
-#page-record .hero{flex:none;}
+/* 主卡上方留出熊和胶带探出的空间（熊 56px，取 60px 有余量） */
+#page-record .hero{flex:none; margin-top:60px;}
 #page-record .composer{flex:none;}
-/* feed 是独立滚动容器（overflow-y:auto），卡片上 top:-11px 探出卡外的胶带
-   会被它裁掉上半截 —— 所以顶部必须留出 12px，别改成 0。 */
-#page-record .feed{flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-top:12px;}
+/* feed 是独立滚动容器（overflow-y:auto），卡片上探出卡外的胶带会被它裁掉，
+   所以顶部要留 ≥27px；左右留 9px（胶带横向探出 7.3px）。
+   用负外边距抵掉内边距，卡片宽度和位置不变。 */
+#page-record .feed{
+  flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+  padding:30px 9px 4px;
+  margin:-30px -9px 0;
+}
 #page-record .feed::-webkit-scrollbar{width:0;}
 /* 其余页面给底部任务栏留出空间 */
 #page-ledger.active,#page-stats.active,#page-me.active{
@@ -313,7 +326,8 @@ main::-webkit-scrollbar{width:0;}
 .entry .a.in{color:var(--blue-d);}
 
 /* ---------- 统计页 ---------- */
-.st-hero{padding:15px 16px; margin-bottom:13px;}
+/* 上方留出熊探出的 52px（.st-bear top:-52px），否则熊头会被 main 裁掉 */
+.st-hero{padding:15px 16px; margin:56px 0 13px;}
 .st-hero .lb{font-size:13px; color:var(--ink2);}
 .st-amt{font-size:36px; line-height:1.1; color:var(--ink);}
 .st-bear{
@@ -448,7 +462,9 @@ html:not([data-standalone]) .tabbar{padding-bottom:calc(8px + env(safe-area-inse
 .dp-today{width:100%; margin-top:14px; padding:12px 0; border-radius:999px; font-size:15px;
   background:var(--pink-l); color:var(--pink-d); border:1.5px solid #FBC4D4; box-shadow:var(--sh-sm);}
 
-/* ---------- 弹层（记一笔 / 编辑） ---------- */
+/* ---------- 弹层（记一笔 / 编辑） ----------
+   ⚠️ 分两层：#sheet 只负责外观（不滚动），胶带/星星挂在它身上；
+   真正滚动的是内层 #sheetScroll。装饰若挂在滚动容器上，探出的部分会被裁掉。 */
 #mask{
   position:fixed; inset:0; z-index:80; background:rgba(90,140,160,.30);
   display:none; align-items:flex-end; justify-content:center;
@@ -456,13 +472,14 @@ html:not([data-standalone]) .tabbar{padding-bottom:calc(8px + env(safe-area-inse
 #mask.show{display:flex;}
 #sheet{
   position:relative; width:100%; max-width:560px; max-height:90vh;
-  overflow-y:auto; -webkit-overflow-scrolling:touch;
+  display:flex; flex-direction:column;
   background:var(--paper); border:1.5px dashed var(--line);
   border-radius:26px 26px 0 0;
   box-shadow:0 -6px 24px rgba(150,196,212,.28);
   animation:sheetUp .22s ease;
 }
 @keyframes sheetUp{from{transform:translateY(30px);} to{transform:none;}}
+/* 胶带探出弹层顶部 26.6px（旋转后的实测值），挂在不滚动的 #sheet 上 */
 #sheet::before{
   content:''; position:absolute; left:12px; top:-9px; width:58px; height:21px;
   border-radius:2px;
@@ -471,6 +488,12 @@ html:not([data-standalone]) .tabbar{padding-bottom:calc(8px + env(safe-area-inse
   transform:rotate(-38deg);
   box-shadow:0 2px 4px rgba(120,175,195,.30);
   pointer-events:none; z-index:3;
+}
+/* 内层滚动区：sticky 的标题栏要在这一层里才吸得住 */
+#sheetScroll{
+  flex:1 1 auto; min-height:0;
+  overflow-y:auto; -webkit-overflow-scrolling:touch;
+  border-radius:inherit;
 }
 .sheet-head{
   position:sticky; top:0; z-index:2;
@@ -746,15 +769,19 @@ html[data-page="stats"] header::after{ display:none; }
 <div id="dpMask"></div>
 <div id="dpPanel"><div class="dp-inner" id="dpInner"></div></div>
 
-<!-- 记一笔 / 编辑 -->
+<!-- 记一笔 / 编辑
+     #sheet 只管外观（不滚动，胶带和星星挂它身上不会被裁），
+     #sheetScroll 才是滚动层 -->
 <div id="mask">
   <div id="sheet">
     <span class="sheet-star"></span>
-    <div class="sheet-head">
-      <h2 id="sheetTitle">记一笔</h2>
-      <button class="sheet-close" id="sheetClose">✕</button>
+    <div id="sheetScroll">
+      <div class="sheet-head">
+        <h2 id="sheetTitle">记一笔</h2>
+        <button class="sheet-close" id="sheetClose">✕</button>
+      </div>
+      <div class="sheet-body" id="sheetBody"></div>
     </div>
-    <div class="sheet-body" id="sheetBody"></div>
   </div>
 </div>
 
