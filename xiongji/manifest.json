@@ -6,7 +6,8 @@
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#B5DEE6",
+  "_comment_background": "独立 App 模式下，视口底部约 47pt 是 iOS 窗口背景区，网页画不进去，由系统按这个颜色填。设成白色 = 与底部 tab 栏同色，视觉上 tab 栏一路贴到屏幕底（设成薄荷蓝会露出一条异色带）。",
+  "background_color": "#FFFFFF",
   "theme_color": "#B5DEE6",
   "lang": "zh-CN",
   "icons": [
