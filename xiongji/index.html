@@ -6,7 +6,10 @@
 <meta name="format-detection" content="telephone=no">
 <title>熊记</title>
 <meta name="description" content="手账风记账 · 快捷指令自动记账 · 数据存自己的 GitHub 私有仓库 · 离线可用">
-<meta name="theme-color" content="#B5DEE6">
+<!-- theme-color 设为白色：iOS 独立 App 模式下视口底部约 47pt 是系统窗口背景区
+     （网页渲染不进去），它的填色跟这里 / manifest 的 background_color 走。
+     设成白色才能和底部 tab 栏连成一片，不然会露出一条薄荷色带。 -->
+<meta name="theme-color" content="#FFFFFF">
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" type="image/png" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
@@ -64,10 +67,14 @@
    （见 JS 里的 lockZoom）。别在 touchend 里 preventDefault，会吃掉 click。 */
 html,body{touch-action:pan-x pan-y; overscroll-behavior:none;}
 
+/* ⚠️ html 的底色必须是白色 —— iOS 独立 App 模式下视口底部约 47pt 是系统窗口
+   背景区（网页渲染不进去），**系统画那条带时取的就是 html 的底色**。
+   设成薄荷色就会在底部露出一条薄荷带，看起来像 tab 栏没贴底。
+   页面真正的薄荷底 + 波点由下面的 body::before 铺满视口（见那条注释）。 */
 html{
   -webkit-text-size-adjust:100%; overflow-anchor:none;
   height:100%; overflow:hidden;
-  background-color:var(--page);
+  background-color:#FFFFFF;
 }
 body{
   height:100%;
@@ -79,18 +86,17 @@ body{
   display:flex; flex-direction:column;
   overflow:hidden;
 }
-/* 白波点层：固定铺满视口，垫在所有内容之下 */
+/* 薄荷底 + 白波点：固定铺满视口，垫在所有内容之下。
+   底色放在这一层而不是 html 上，是为了让 html 保持白色（见上面那条注释）。 */
 body::before{
   content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background-color:var(--page);
   background-image:radial-gradient(#FFFFFF 2.2px, transparent 2.5px);
   background-size:14px 14px;
 }
-/* 独立 App 模式下底部约 47pt 是 iOS 窗口背景区，网页画不进去。
-   波点硬切会留一条「有波点→没波点」的横线，所以让它柔和收掉。 */
-html[data-standalone="1"] body::before{
-  -webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 58px),transparent 100%);
-  mask-image:linear-gradient(to bottom,#000 calc(100% - 58px),transparent 100%);
-}
+/* 独立 App 模式下视口底部约 47pt 是 iOS 窗口背景区（网页渲染不进去），
+   那里由系统填成白色、和 tab 栏同色；视口最底部本来就被 tab 栏盖住，
+   所以波点不需要再做渐隐。 */
 
 button{font-family:inherit; color:var(--ink); cursor:pointer; border:none; background:none; padding:0;}
 input,select,textarea{font-family:inherit; color:var(--ink);}
@@ -428,13 +434,13 @@ html[data-standalone="1"] .tabbar{padding-bottom:8px;}
 html:not([data-standalone]) .tabbar{padding-bottom:calc(8px + env(safe-area-inset-bottom,0px));}
 .tab{
   flex:1; position:relative; z-index:1;
-  padding:8px 0 7px; border-radius:999px;
-  display:flex; flex-direction:column; align-items:center; gap:4px;
-  font-size:11.5px; color:var(--ink3);
+  padding:9px 0 8px; border-radius:999px;
+  display:flex; flex-direction:column; align-items:center; gap:5px;
+  font-size:12px; color:var(--ink3);
 }
-/* 图标放大到 26px（原 20px）。整条栏的高度会跟着涨，JS 会重新量进 --tab-h，
-   内容区的底部留白和 toast 位置都跟着它走，不用手改数值。 */
-.tab img{height:26px; width:auto; object-fit:contain; opacity:.42; filter:grayscale(.6);}
+/* 图标 32px。加 max-width 兜底：个别贴纸是「两只熊并排」的宽图，
+   只限高度的话会被拉得很宽，撑破 tab。 */
+.tab img{height:32px; width:auto; max-width:72%; object-fit:contain; opacity:.42; filter:grayscale(.6);}
 .tab.on{background:var(--pink-l); color:var(--pink-d);}
 .tab.on img{opacity:1; filter:none;}
 .tab-pill{

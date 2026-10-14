@@ -6,9 +6,10 @@
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "_comment_background": "独立 App 模式下，视口底部约 47pt 是 iOS 窗口背景区，网页画不进去，由系统按这个颜色填。设成白色 = 与底部 tab 栏同色，视觉上 tab 栏一路贴到屏幕底（设成薄荷蓝会露出一条异色带）。",
+  "_comment_bg": "独立 App 模式下，视口底部约 47pt 是 iOS 窗口背景区，网页渲染不进去，由系统按这里填色。设成白色 = 与底部 tab 栏同色，视觉上 tab 栏一路贴到屏幕底。⚠️ iOS 只在「添加到主屏幕」时读一次 manifest，改这里必须删掉图标重新添加才生效。",
   "background_color": "#FFFFFF",
-  "theme_color": "#B5DEE6",
+  "_comment_theme": "theme_color 也可能是那条带的取色来源，一并设成白色（原先 #B5DEE6 会在底部露出一条薄荷带）。",
+  "theme_color": "#FFFFFF",
   "lang": "zh-CN",
   "icons": [
     { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
