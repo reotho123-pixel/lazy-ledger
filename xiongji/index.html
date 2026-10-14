@@ -714,7 +714,7 @@ html[data-page="stats"] header::after{ display:none; }
       <div class="types">
         <span class="type-pill" id="typePill"></span>
         <button class="type-btn on-ex" id="typeEx">支出 －</button>
-        <button class="type-btn on-in" id="typeIn">收入 ＋</button>
+        <button class="type-btn" id="typeIn">收入 ＋</button>
       </div>
       <div class="input-row">
         <input id="chatInput" placeholder="记一笔… 例如「午饭 15 块」" autocomplete="off">
@@ -1435,7 +1435,10 @@ function drawDp(){
 
 /* ==========================================================================
    11. 记一笔 / 编辑弹层
-   ========================================================================== */
+   ==========================================================================
+   ⚠️ 命名注意：底部 tab 栏的滑块叫 movePill()（全局，见上面）。
+      收支切换的滑块叫 moveTypePill()（在 bind() 里），别跟它重名 ——
+      同名时 bind() 内的定义会遮住全局那个，tab 栏滑块就再也不动了。 */
 var editingId = null, curType = 'expense', curCat = '其他', curAcc = '微信支付';
 
 /* ---------- 从按钮形变展开（Trigger Morph） ----------
@@ -2150,19 +2153,29 @@ function bind(){
      过渡由合成器驱动，不受影响，而且和形变展开用同一条缓动曲线。 */
   var typePill = $('typePill'), typeEx = $('typeEx'), typeIn = $('typeIn');
 
-  function movePill(animate){
+  function moveTypePill(animate){
     var box = typeEx.parentNode.getBoundingClientRect();
     var r = (curType === 'income' ? typeIn : typeEx).getBoundingClientRect();
-    if (!r.width) return;                     // 还没布局完，等下一次
+    if (!r.width || !box.width) return;       // 还没布局完，等下一次
+    var x = r.left - box.left, w = r.width;
+
     typePill.style.height = r.height + 'px';
-    if (!animate) typePill.classList.add('noanim');   // 初始定位不要动
-    // 先强制回流让 noanim / 起始值提交，再写目标值
-    void typePill.offsetWidth;
-    typePill.style.transform = 'translateX(' + (r.left - box.left) + 'px)';
-    typePill.style.width = r.width + 'px';
-    typePill.classList.add('ready');
+
     if (!animate) {
-      setTimeout(function(){ typePill.classList.remove('noanim'); }, 40);
+      // 初始定位 / 尺寸变化：先关过渡、写值、强制提交，再放开过渡。
+      // ⚠️ 顺序必须是「关过渡 → 写值 → 回流 → 开过渡」；
+      //    先回流再写值的话，写进去的起点和终点在同一帧，过渡不会启动。
+      typePill.classList.add('noanim');
+      typePill.style.transform = 'translateX(' + x + 'px)';
+      typePill.style.width = w + 'px';
+      void typePill.offsetWidth;              // 提交起始值
+      typePill.classList.add('ready');
+      typePill.classList.remove('noanim');
+    } else {
+      // 点击切换：同一个 tick 里写两个属性，过渡自动从当前值跑到新值
+      typePill.style.transform = 'translateX(' + x + 'px)';
+      typePill.style.width = w + 'px';
+      typePill.classList.add('ready');
     }
   }
   function paintTypes(animate){
@@ -2173,12 +2186,12 @@ function bind(){
     $('chatInput').placeholder = income
       ? '记一笔收入… 例如「收到工资 5200」'
       : '记一笔… 例如「午饭 15 块」';
-    movePill(animate);
+    moveTypePill(animate);
   }
   // 初始必须同步写一次，否则首帧前滑块停在左上角
-  setTimeout(function(){ movePill(false); }, 0);
-  window.addEventListener('resize', function(){ movePill(false); });
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ movePill(false); });
+  setTimeout(function(){ moveTypePill(false); }, 0);
+  window.addEventListener('resize', function(){ moveTypePill(false); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ moveTypePill(false); });
 
   typeEx.onclick = function(){ curType = 'expense'; paintTypes(true); };
   typeIn.onclick = function(){ curType = 'income';  paintTypes(true); };
