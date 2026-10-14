@@ -135,33 +135,47 @@ header{
 .nav-btn:active{transform:scale(.94);}
 .ym-label{font-size:14px; padding:0 2px; white-space:nowrap;}
 
-/* ---------- 内容区 ---------- */
+/* ---------- 内容区 ----------
+   ⚠️ 顶部内边距是给「探出卡外的胶带/贴纸」留的空间，不能改小：
+     胶带旋转后实际探出卡外 26.6px、统计卡的熊探出 52px（见 .tape 注释）。
+   本容器 overflow-y:auto 会把超出部分直接裁掉，所以要留 ≥56px。
+   用「padding 撑空间 + 负 margin 抵消」的写法：裁切区（padding box）
+   向上扩了 56px，但卡片位置和宽度完全不变。 */
 main{
   position:relative; z-index:10; flex:1 1 auto; min-height:0;
   overflow-y:auto; -webkit-overflow-scrolling:touch;
-  max-width:660px; width:100%; margin:0 auto;
-  /* 顶部 14px 给探出卡外的胶带留位置，别改成 0 */
-  padding:14px 12px 12px;
+  max-width:660px; width:100%;
+  margin-left:auto; margin-right:auto; margin-top:-56px;
+  padding:56px 12px 12px;
 }
 main::-webkit-scrollbar{width:0;}
 .page{display:none;}
 .page.active{display:block;}
 
 /* 记录页要三段固定（主卡 / 输入区 / 卡片流），单独用绝对定位铺满，
-   高度由 inset 决定，不依赖 100vh（iOS 独立 App 下 100vh 会偏小）。 */
+   高度由 inset 决定，不依赖 100vh（iOS 独立 App 下 100vh 会偏小）。
+   ⚠️ 这里不能加 overflow:hidden —— 它会把探出卡外的胶带/贴纸裁掉
+   （.feed 自己会滚，不需要这层再裁一次）。 */
 #page-record.active{
   position:absolute; z-index:10;
-  top:calc(var(--head-h,52px) + 8px); left:12px; right:12px;
+  top:calc(var(--head-h,52px) + 6px); left:12px; right:12px;
   bottom:calc(var(--tab-h,64px) + 8px);
-  display:flex; flex-direction:column; overflow:hidden;
+  display:flex; flex-direction:column;
   padding:0; max-width:none; margin:0;
 }
 #page-record .hero{flex:none;}
 #page-record .composer{flex:none;}
-/* feed 是独立滚动容器（overflow-y:auto），卡片上 top:-11px 探出卡外的胶带
-   会被它裁掉上半截 —— 所以顶部必须留出 12px，别改成 0。 */
-#page-record .feed{flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-top:12px;}
+/* 卡片流：独立滚动。顶部内边距同样要给胶带留够（≥27px），
+   左右给 9px（胶带横向探出 7.3px）。
+   用负外边距抵掉，卡片宽度和位置不变。 */
+#page-record .feed{
+  flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+  padding:30px 9px 4px;
+  margin:-30px -9px 0;
+}
 #page-record .feed::-webkit-scrollbar{width:0;}
+/* 首屏主卡的胶带探到卡片外，给它留空间（这一层不滚动，内边距即可） */
+#page-record .hero{margin-top:28px;}
 /* 其余页面给底部任务栏留出空间 */
 #page-ledger.active,#page-stats.active,#page-me.active{
   padding-bottom:calc(var(--tab-h,64px) + 14px);
@@ -178,7 +192,12 @@ main::-webkit-scrollbar{width:0;}
 .card.solid{border-style:solid; border-color:var(--line-soft);}
 
 /* 胶带：横跨卡片左上角 —— 一半压在卡片上、一半探到卡片外。
-   粉色要够深才在白卡上读得出来（浅粉会和白卡同色而"隐形"）。 */
+   ⚠️ 尺寸和旋转角不能随便改：58×21 旋转 -38° 后，**实际绘制范围比布局盒
+   高 15.6px、宽 0.3px**（旋转是绘制变换，不改布局盒）。所以"top:-11px"
+   实际探出卡外 26.6px，不是 11px。
+   凡是会裁切的祖先容器（overflow 非 visible），顶部内边距都必须 ≥ 27px、
+   左右 ≥ 9px —— 下面 main / .feed / #sheetWrap 都是按这个数给的。
+   改旋转角或尺寸就要重算，并用 tools\check-clip.html 复验。 */
 .tape{
   position:absolute; left:-8px; top:-11px; width:58px; height:21px;
   border-radius:2px;
@@ -448,29 +467,37 @@ html:not([data-standalone]) .tabbar{padding-bottom:calc(8px + env(safe-area-inse
 .dp-today{width:100%; margin-top:14px; padding:12px 0; border-radius:999px; font-size:15px;
   background:var(--pink-l); color:var(--pink-d); border:1.5px solid #FBC4D4; box-shadow:var(--sh-sm);}
 
-/* ---------- 弹层（记一笔 / 编辑） ---------- */
+/* ---------- 弹层（记一笔 / 编辑） ----------
+   ⚠️ 结构上分两层：外层 #sheetWrap 不滚动、胶带挂在它身上；内层 #sheet 才滚动。
+   之前胶带挂在滚动容器上（overflow-y:auto），探出的部分会被裁掉 ——
+   这个坑在卡片上踩过一次，弹层这里用「不滚动的那层挂装饰」从结构上避免。 */
 #mask{
   position:fixed; inset:0; z-index:80; background:rgba(90,140,160,.30);
   display:none; align-items:flex-end; justify-content:center;
 }
 #mask.show{display:flex;}
-#sheet{
-  position:relative; width:100%; max-width:560px; max-height:90vh;
-  overflow-y:auto; -webkit-overflow-scrolling:touch;
-  background:var(--paper); border:1.5px dashed var(--line);
-  border-radius:26px 26px 0 0;
-  box-shadow:0 -6px 24px rgba(150,196,212,.28);
+#sheetWrap{
+  position:relative; width:100%; max-width:560px;
+  /* 顶部给胶带留空间（探出 26.6px），并让圆角外的胶带可见 */
+  padding-top:28px;
   animation:sheetUp .22s ease;
 }
 @keyframes sheetUp{from{transform:translateY(30px);} to{transform:none;}}
-#sheet::before{
-  content:''; position:absolute; left:12px; top:-9px; width:58px; height:21px;
+#sheetWrap::before{
+  content:''; position:absolute; left:12px; top:2px; width:58px; height:21px;
   border-radius:2px;
   background:linear-gradient(135deg,#FDDCE6 0%,#FAC9D8 52%,#F7BCCE 100%);
   border:1px solid rgba(240,163,186,.75);
   transform:rotate(-38deg);
   box-shadow:0 2px 4px rgba(120,175,195,.30);
   pointer-events:none; z-index:3;
+}
+#sheet{
+  position:relative; width:100%; max-height:calc(90vh - 28px);
+  overflow-y:auto; -webkit-overflow-scrolling:touch;
+  background:var(--paper); border:1.5px dashed var(--line);
+  border-radius:26px 26px 0 0;
+  box-shadow:0 -6px 24px rgba(150,196,212,.28);
 }
 .sheet-head{
   position:sticky; top:0; z-index:2;
@@ -746,15 +773,18 @@ html[data-page="stats"] header::after{ display:none; }
 <div id="dpMask"></div>
 <div id="dpPanel"><div class="dp-inner" id="dpInner"></div></div>
 
-<!-- 记一笔 / 编辑 -->
+<!-- 记一笔 / 编辑
+     外层 #sheetWrap 不滚动（胶带挂它身上，不会被裁），内层 #sheet 才滚 -->
 <div id="mask">
-  <div id="sheet">
-    <span class="sheet-star"></span>
-    <div class="sheet-head">
-      <h2 id="sheetTitle">记一笔</h2>
-      <button class="sheet-close" id="sheetClose">✕</button>
+  <div id="sheetWrap">
+    <div id="sheet">
+      <span class="sheet-star"></span>
+      <div class="sheet-head">
+        <h2 id="sheetTitle">记一笔</h2>
+        <button class="sheet-close" id="sheetClose">✕</button>
+      </div>
+      <div class="sheet-body" id="sheetBody"></div>
     </div>
-    <div class="sheet-body" id="sheetBody"></div>
   </div>
 </div>
 
