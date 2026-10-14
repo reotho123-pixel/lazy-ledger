@@ -1558,7 +1558,7 @@ function renderChat(){
   recs.sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
   var feed = $('chatFeed');
   if(!recs.length){
-    feed.innerHTML = '<div class="box pad empty"><div class="big"><img src="bears/tab-ledger.png" alt=""></div>'
+    feed.innerHTML = '<div class="box pad empty"><div class="big"><img src="bears/hero-sleep.png" alt=""></div>'
       + '<div class="t">都记完啦，熊熊等你哦</div>'
       + '<div class="t">在上面输入「午饭15块」就能记一笔</div></div>';
   } else {
@@ -1655,7 +1655,7 @@ function renderList(){
   }
   var body = $('listBody');
   if(!recs.length){
-    body.innerHTML = '<div class="box pad empty"><div class="big"><img src="bears/tab-stats.png" alt=""></div>'
+    body.innerHTML = '<div class="box pad empty"><div class="big"><img src="bears/hero-read.png" alt=""></div>'
       + '<div class="t">这个月还没有记录</div></div>';
     return;
   }
