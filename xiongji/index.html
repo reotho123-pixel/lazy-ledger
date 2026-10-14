@@ -87,10 +87,21 @@ body{
   height:var(--app-h,100%);
   margin:0; color:var(--ink);
   background:transparent;
+  /* 手写体：站酷快乐体本地打包，离线可用；后面是系统兜底。
+     ⚠️ font-weight 必须显式写 400：这套字体只有 400 一档，
+        一旦继承到更粗的字重（比如 <b>、<h2> 或某处写了 700），
+        浏览器会「合成加粗」把字形描粗 —— 看起来就像换了另一种字体。
+        原版熊记在这三处都钉住了 400（body / button / input）。 */
   font-family:'ZCOOL KuaiLe',-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
   line-height:1.45;
+  font-weight:400;
   display:flex; flex-direction:column;
   overflow:hidden;
+}
+/* 金额 / 统计数字：等宽对齐 + 紧字距（与原版熊记同一组选择器与取值） */
+.num,.hero-amt,.sum-amt,.st-amt,.row-amt,.cell-v,.split-v,.mcol-v,.cat-amt,.bud-foot{
+  font-variant-numeric:tabular-nums;
+  letter-spacing:-1px;
 }
 /* 薄荷底 + 白波点：固定铺满视口，垫在所有内容之下。
    底色放在这一层而不是 html 上，是为了让 html 保持白色（见上面那条注释）。 */
@@ -104,14 +115,16 @@ body::before{
    那里由系统填成白色、和 tab 栏同色；视口最底部本来就被 tab 栏盖住，
    所以波点不需要再做渐隐。 */
 
-button{font-family:inherit; color:var(--ink); cursor:pointer; border:none; background:none; padding:0;}
-input,select,textarea{font-family:inherit; color:var(--ink);}
+/* 按钮 / 输入框也钉住 400：控件不继承 body 的字重，
+   浏览器的默认 UA 样式会给它们更粗的值，站酷快乐体在那档只能合成加粗。 */
+button{font-family:inherit; font-weight:400; color:var(--ink); cursor:pointer; border:none; background:none; padding:0;}
+input,select,textarea{font-family:inherit; font-weight:400; color:var(--ink);}
 input:focus,select:focus,textarea:focus{outline:none;}
 
-/* 数字统一等宽 + 紧字距，避免位数变化时跳动 */
-.num,.hero-amt,.sum-amt,.st-amt,.row-amt,.cell-v,.split-v,.mcol-v,.cat-amt,.bud-foot{
-  font-variant-numeric:tabular-nums; letter-spacing:-.5px;
-}
+/* ⚠️ 别在这里给 b/strong/h1-h6 钉 font-weight。
+   站酷快乐体只有 400 一档，原版熊记并没有重置这些标签 ——
+   弹层标题 <h2>记一笔</h2> 在原版就是靠浏览器的默认 700 合成加粗显示的。
+   跟着重置会让标题变细，反而和原版不一致。 */
 
 /* ---------- 顶栏 ---------- */
 header{
