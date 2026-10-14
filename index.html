@@ -12,7 +12,15 @@
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- ⚠️ 必须是 default，不要改成 black-translucent。
+     2026-10-14 真机实测：black-translucent 下 iOS 会让网页铺到状态栏底下，
+     但把**屏幕最底那 47px** 让出去 —— 视口底比屏幕底高 47px（诊断面板读数
+     innerHeight 797 vs screen.height 844）。底栏 position:fixed;bottom:0 贴着
+     视口底，于是永远悬在那 47px 之上，改多少 padding 都没用。
+     同项目的「待会吃什么 / 坚持 / 极简」三处都用 default，
+     底栏都正常贴底；本 App 与熊记用 black-translucent，都偏高。
+     改成 default 后视口会铺到屏幕最底，底栏自然贴底。 -->
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="懒人记账">
 <script>
 /* 首屏就判定是否「独立 App 模式」（加到主屏后从图标启动）——必须在 CSS 生效前设置。
