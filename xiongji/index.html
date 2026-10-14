@@ -77,14 +77,14 @@ html{
   background-color:#FFFFFF;
 }
 body{
-  /* ⚠️ 高度用纯 CSS（html 已 height:100%），**不再由 JS 写 --app-h**。
-     原先写 height:var(--app-h,100%)、值来自 setAppHeight() 里读的 window.innerHeight，
-     在 iOS 独立模式下那个值和真实可视区对不齐，body 会偏矮、底部漏出一条，
-     底栏看着就是"悬空一格"。
-     同项目的「极简」(digital-shelf) 用的就是 html/body height:100% 这条链，
-     在真机上已验证贴底；「待会吃什么」用 100dvh 同样正常。
-     两者都是浏览器自己算高度，不存在 JS 测量偏差 —— 所以这里改成 100%。 */
+  /* ⚠️ 高度必须由 JS 写 --app-h，**不要改成 height:100% / 100vh / 100dvh**。
+     2026-10-14 实测教训：把这里换成纯 CSS 之后，用户反馈"底栏又悬空了"——
+     也就是退回了 100vh 那条路。iOS 独立 App 下 100vh 偏小，
+     body 跟着偏矮，底部就漏出一条。
+     setAppHeight() 里读 window.innerHeight（并用 visualViewport 兜底）写进来的值，
+     才是和真实可视区对齐的那个高度。 */
   height:100%;
+  height:var(--app-h,100%);
   margin:0; color:var(--ink);
   background:transparent;
   font-family:'ZCOOL KuaiLe',-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
@@ -272,13 +272,26 @@ main::-webkit-scrollbar{width:0;}
 /* 浅粉底配深粉字（支出＝主动作）；收入走淡蓝 */
 .type-btn.on-ex{color:var(--pink-d);}
 .type-btn.on-in{color:var(--blue-d);}
-/* 跟随滑块：粉色/蓝色底 + 描边都在这里，跨按钮平移 */
+/* 跟随滑块：粉色/蓝色底 + 描边都在这里，跨按钮平移。
+   ⚠️ 宽度必须由 JS 量按钮 rect 后写入；CSS 里不给 width，
+      否则 flex 会把初始的 0 宽滑块拉到整行宽（看起来像一条通栏的线）。
+   JS 未就绪时先靠 visibility 藏住，避免首帧闪一条错位的色带。 */
 .type-pill{
   position:absolute; left:0; top:0; z-index:0;
+  width:0; height:0; visibility:hidden;
   border-radius:999px; pointer-events:none;
   background:var(--pink-l); border:1.5px solid #FBC4D4;
   will-change:transform;
+  /* 位置和宽度走同一条过渡，两者天然同步（不会一个先到一个后到）。
+     缓动与形变展开同一条曲线，手感一致。
+     ⚠️ 别改用 rAF 弹簧：滑块是「滑到某个位置」的定位行为，
+        一旦 rAF 被节流（后台标签/被遮挡窗口）就会卡在半路。 */
+  transition:transform .34s cubic-bezier(.22,.9,.24,1),
+             width .34s cubic-bezier(.22,.9,.24,1),
+             background-color .2s ease, border-color .2s ease;
 }
+.type-pill.ready{visibility:visible;}
+.type-pill.noanim{transition:none;}   /* 初始定位 / 尺寸变化时不动画 */
 .type-pill.income{background:var(--blue-l); border-color:var(--blue-d);}
 .types{position:relative;}
 .input-row{display:flex; gap:9px; align-items:stretch;}
@@ -1431,26 +1444,44 @@ var editingId = null, curType = 'expense', curCat = '其他', curAcc = '微信�
    ⚠️ 用 Web Animations API 而不是弹簧：要能反向播放、能暂停到任意进度。
    遮罩和面板同时在动，时长一致；内部内容延迟到 62% 才淡入，
    否则面板还在变宽时文字会被横向压扁。 */
-var morphAnims = [], morphHostBtn = null;
+var morphAnims = [], morphHostBtn = null, morphSettleTimer = null;
+
+/* 收尾一定要发生：WAAPI 的 finished 在后台标签页/被遮挡窗口里可能不触发，
+   只靠它会出现「面板停在半路、关不掉」。用同长的定时器兜底，
+   谁先到谁收尾，done 标记防止重复执行。 */
+function armSettle(fn, ms){
+  var done = false;
+  clearTimeout(morphSettleTimer);
+  morphSettleTimer = setTimeout(function(){ if (!done) { done = true; fn(); } }, ms + 60);
+  return function(){ if (!done) { done = true; clearTimeout(morphSettleTimer); fn(); } };
+}
+
+function resetSheetInline(){
+  var sheet = $('sheet');
+  sheet.style.width = ''; sheet.style.height = ''; sheet.style.transform = '';
+  sheet.style.opacity = ''; sheet.style.borderRadius = '';
+  sheet.style.transformOrigin = ''; sheet.style.overflow = '';
+}
 
 function morphIn(btn){
   var mask = $('mask'), sheet = $('sheet'), inner = $('sheetScroll');
   morphHostBtn = btn || null;
 
   mask.classList.add('show');
-  // 面板已在 DOM 里，先量它的最终位置
-  sheet.style.animation = 'none';   // 关掉旧的下滑动画，避免和形变打架
-  var sr = sheet.getBoundingClientRect();
+  sheet.style.animation = 'none';      // 关掉旧的下滑动画，避免和形变打架
+  sheet.style.visibility = 'visible';
 
-  if (FX.motionOff || !btn) {       // 降级：直接显示
-    sheet.style.visibility = 'visible';
+  var sr = sheet.getBoundingClientRect();
+  var br = btn ? btn.getBoundingClientRect() : null;
+
+  if (FX.motionOff || !br || !br.width) {   // 降级 / 拿不到按钮：直接显示
+    resetSheetInline();
+    morphAnims = [];
     return;
   }
 
-  var br = btn.getBoundingClientRect();
-  sheet.style.visibility = 'visible';
   sheet.style.transformOrigin = '0 0';
-  // 形变期间才裁切（内容不会溢出成乱字）；动画一结束就摘掉，
+  // 形变期间才裁切（内容不会溢出成乱字）；结束后摘掉，
   // 否则胶带/星星探出面板的部分会被裁掉。
   sheet.style.overflow = 'hidden';
 
@@ -1472,36 +1503,41 @@ function morphIn(btn){
     { duration: 620, easing: 'ease-out', fill: 'both' });
 
   morphAnims = [a1, a2, a3];
-  a1.finished.then(function(){
-    // 动画结束后释放内联几何，交回 CSS（否则后续布局全被锁死）
-    a1.cancel(); a2.cancel(); a3.cancel();
-    sheet.style.width = ''; sheet.style.height = ''; sheet.style.transform = '';
-    sheet.style.opacity = ''; sheet.style.borderRadius = '';
-    sheet.style.transformOrigin = ''; sheet.style.overflow = '';
+
+  function finishIn(){
+    try { a1.cancel(); a2.cancel(); a3.cancel(); } catch(e){}
+    resetSheetInline();
     morphAnims = [];
-  }).catch(function(){ morphAnims = []; });
+  }
+  a1.finished.then(finishIn).catch(finishIn);
+  armSettle(finishIn, 620);
 }
 
 function morphOut(done){
   var mask = $('mask'), sheet = $('sheet'), inner = $('sheetScroll');
-
-  if (FX.motionOff || !morphAnims.length) {
-    mask.classList.remove('show');
-    if (done) done();
-    return;
-  }
-  // 把正在跑的入场动画定在当前进度，从「当前可见几何」反向收回
-  morphAnims.forEach(function(a){ try { a.pause(); } catch(e){} });
-
-  var sr = sheet.getBoundingClientRect();
-  var br = morphHostBtn && morphHostBtn.isConnected
-    ? morphHostBtn.getBoundingClientRect()
-    : { left: sr.left + sr.width/2, top: sr.bottom, width: 0, height: 0 };
-
-  morphAnims.forEach(function(a){ try { a.cancel(); } catch(e){} });
+  var closing = morphAnims.slice();
   morphAnims = [];
 
+  // 从当前可见几何量（不是从终态），这样中途反悔也不会跳
+  var sr = sheet.getBoundingClientRect();
+  var br = (morphHostBtn && morphHostBtn.isConnected)
+    ? morphHostBtn.getBoundingClientRect()
+    : null;
+
+  closing.forEach(function(a){ try { a.cancel(); } catch(e){} });
+
+  function teardown(){
+    resetSheetInline();
+    sheet.style.visibility = 'hidden';
+    mask.classList.remove('show');
+    if (done) done();
+  }
+
+  if (FX.motionOff || !br || !br.width || !sr.width) { teardown(); return; }
+
   sheet.style.transformOrigin = '0 0';
+  sheet.style.overflow = 'hidden';
+
   var o1 = sheet.animate([
     { transform: 'translate(0,0)', width: sr.width + 'px', height: sr.height + 'px',
       borderRadius: '26px 26px 0 0', opacity: 1 },
@@ -1513,15 +1549,8 @@ function morphOut(done){
   mask.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 420, easing: 'ease-in', fill: 'both' });
 
   // ⚠️ 用 finished.then 收尾，不要在 onfinish 里 cancel（会变成 oncancel，回调不再触发）
-  o1.finished.then(function(){
-    o1.cancel();
-    sheet.style.width = ''; sheet.style.height = ''; sheet.style.transform = '';
-    sheet.style.opacity = ''; sheet.style.borderRadius = ''; sheet.style.transformOrigin = '';
-    sheet.style.overflow = '';
-    sheet.style.visibility = 'hidden';
-    mask.classList.remove('show');
-    if (done) done();
-  }).catch(function(){ mask.classList.remove('show'); if (done) done(); });
+  o1.finished.then(function(){ o1.cancel(); teardown(); }).catch(teardown);
+  armSettle(function(){ try { o1.cancel(); } catch(e){} teardown(); }, 420);
 }
 
 // 普通弹层也走形变：入口统一从这里开
@@ -1922,23 +1951,51 @@ function openAbout(){
 function openExport(){
   var list = allRecords();
   if (!list.length) { toast('还没有数据'); return; }
-  var lines = ['日期,时间,类型,分类,金额,备注,支付方式'];
-  list.sort(function(a,b){ return a.ts - b.ts; }).forEach(function(r){
-    lines.push([ ymd(r.ts), hm(r.ts), r.type === 'income' ? '收入' : '支出',
-      r.category || '', r.amount, (r.note || '').replace(/,/g,'，'), r.account || '' ].join(','));
-  });
-  var csv = '\ufeff' + lines.join('\r\n');
 
-  var blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  a.href = url;
-  a.download = '熊记-' + ymd(Date.now()) + '.csv';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(function(){ URL.revokeObjectURL(url); }, 3000);
-  toast('已导出 ' + list.length + ' 笔');
+  list.sort(function(a,b){ return a.ts - b.ts; });
+  var from = ymd(list[0].ts), to = ymd(list[list.length-1].ts);
+
+  $('sheetTitle').textContent = '导出数据';
+  $('sheetBody').innerHTML =
+    '<div class="hint" style="font-size:12px;color:var(--ink2);line-height:1.8;margin-bottom:14px;">' +
+      '导出成 CSV，可用 Excel / 数字表格打开。' +
+    '</div>' +
+    '<div class="card" style="padding:14px;border-style:solid;margin-bottom:14px;">' +
+      '<div style="display:flex;justify-content:space-between;font-size:13.5px;">' +
+        '<span>记录笔数</span><b>' + list.length + ' 笔</b></div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:13.5px;margin-top:8px;">' +
+        '<span>时间范围</span><b>' + from + ' ~ ' + to + '</b></div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:13.5px;margin-top:8px;">' +
+        '<span>包含字段</span><b>日期 / 分类 / 金额 / 备注</b></div>' +
+    '</div>' +
+    '<div class="btn-row">' +
+      '<button class="btn" id="expCancel">取消</button>' +
+      '<button class="btn primary" id="expGo">导出 CSV</button>' +
+    '</div>';
+
+  $('sheetClose').onclick = closeSheet;
+  $('expCancel').onclick = closeSheet;
+  $('expGo').onclick = function(){
+    var lines = ['日期,时间,类型,分类,金额,备注,支付方式'];
+    list.forEach(function(r){
+      lines.push([ ymd(r.ts), hm(r.ts), r.type === 'income' ? '收入' : '支出',
+        r.category || '', r.amount, (r.note || '').replace(/,/g,'，'), r.account || '' ].join(','));
+    });
+    var csv = '\ufeff' + lines.join('\r\n');
+    var blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = '熊记-' + ymd(Date.now()) + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 3000);
+    closeSheet();
+    toast('已导出 ' + list.length + ' 笔');
+  };
+
+  openSheetFrom(window.__lastTap);
 }
 
 /* ==========================================================================
@@ -1981,21 +2038,24 @@ function openExport(){
   }
   requestAnimationFrame(function(t){ last = t; requestAnimationFrame(loop); });
 
-  // 注册一条弹簧：step 回 false 表示已静止，自动摘掉
-  window.addSpring = function(s, onFrame, restEps){
+  // 注册一条弹簧：step 回 false 表示已静止，自动摘掉并回调 onRest
+  window.addSpring = function(s, onFrame, restEps, onRest){
     var eps = restEps || 0.0015;
     FX.springs.push({
       step: function(dt){
         step(s, dt);
-        var moving = Math.abs(s.v) > eps || Math.abs(s.t - s.x) > eps;
         onFrame(s.x);
+        var moving = Math.abs(s.v) > eps || Math.abs(s.t - s.x) > eps;
+        if (!moving && onRest) onRest();
         return moving;
       }
     });
   };
 
   /* 按压回弹：按下过阻尼（ζ≈0.62，按住不晃），松手欠阻尼（ζ≈0.31，出回弹）。
-     ⚠️ 两组参数是这套效果的关键 —— 按下若用欠阻尼，按住期间按钮会自己抖。 */
+     ⚠️ 两组参数是这套效果的关键 —— 按下若用欠阻尼，按住期间按钮会自己抖。
+     ⚠️ 弹簧要「按需注册、静止后注销」：常驻注册会让每颗按钮一直跑 rAF；
+       而用时间戳守卫又会出现「松手太快 → 松手弹簧注册不上」的漏动效。 */
   window.bindPress = function(el, opt){
     opt = opt || {};
     var lo = opt.lo === undefined ? 0.93 : opt.lo;
@@ -2004,32 +2064,31 @@ function openExport(){
     var relK   = opt.releaseK || 380, releaseD = opt.releaseD || 12;
 
     var s = makeSpring(hi, pressK, pressD);
-    var raf = false;
+    var live = false;
 
     function paint(){
-      var v = s.x;
       // 只在值真的变了才写样式（多按钮同屏时每帧盲写会反复失效样式）
+      var v = Math.round(s.x * 10000) / 10000;
       if (v !== el.__lastS) {
         el.__lastS = v;
         el.style.transform = v === 1 ? '' : 'scale(' + v.toFixed(4) + ')';
       }
     }
-    function run(){
-      if (raf) return;
-      raf = true;
-      addSpring(s, function(){ paint(); if (!FX.springs.length) raf = false; });
-      setTimeout(function(){ raf = false; }, 900);
+    function wake(){
+      if (live) return;
+      live = true;
+      addSpring(s, paint, 0.002, function(){ live = false; });
     }
 
     function down(){
-      if (FX.motionOff) { el.style.transform = 'scale(' + (0.97) + ')'; return; }
       s.k = pressK; s.d = pressD; s.t = lo;
-      run();
+      if (FX.motionOff) { el.style.transform = 'scale(0.97)'; return; }
+      wake();
     }
     function up(){
-      if (FX.motionOff) { el.style.transform = ''; return; }
       s.k = relK; s.d = releaseD; s.t = hi;
-      run();
+      if (FX.motionOff) { el.style.transform = ''; return; }
+      wake();
     }
 
     el.addEventListener('pointerdown', function(e){ el.setPointerCapture && el.setPointerCapture(e.pointerId); down(); });
@@ -2043,7 +2102,7 @@ function openExport(){
     el.addEventListener('blur', up);
 
     paint();
-    return { down: down, up: up };
+    return { down: down, up: up, spring: s };
   };
 })();
 
@@ -2085,30 +2144,25 @@ function bind(){
   });
 
   /* 支出/收入：粉色滑块跟随 + 两个按钮都带弹簧按压。
-     滑块位置从按钮实时 rect 算，不写死 —— 屏宽和文案都会影响按钮宽度。 */
+     滑块位置从按钮实时 rect 算，不写死 —— 屏宽和文案都会影响按钮宽度。
+     滑块用 CSS 过渡而不是 rAF 弹簧：它是「滑到某个位置」的定位行为，
+     用弹簧一旦 rAF 被节流（后台标签 / 被遮挡窗口）就卡在半路；
+     过渡由合成器驱动，不受影响，而且和形变展开用同一条缓动曲线。 */
   var typePill = $('typePill'), typeEx = $('typeEx'), typeIn = $('typeIn');
 
   function movePill(animate){
     var box = typeEx.parentNode.getBoundingClientRect();
     var r = (curType === 'income' ? typeIn : typeEx).getBoundingClientRect();
-    var x = r.left - box.left, w = r.width;
-    if (animate && !FX.motionOff) {
-      var sx = makeSpring(parseFloat(typePill.getAttribute('data-x')) || x, 170, 15);
-      var sw = makeSpring(parseFloat(typePill.getAttribute('data-w')) || w, 170, 15);
-      sx.t = x; sw.t = w;
-      addSpring(sx, function(v){
-        typePill.style.transform = 'translateX(' + v.toFixed(2) + 'px)';
-        typePill.setAttribute('data-x', v.toFixed(2));
-      });
-      addSpring(sw, function(v){
-        typePill.style.width = v.toFixed(2) + 'px';
-        typePill.setAttribute('data-w', v.toFixed(2));
-      });
-    } else {
-      typePill.style.transform = 'translateX(' + x + 'px)';
-      typePill.style.width = w + 'px';
-      typePill.setAttribute('data-x', x);
-      typePill.setAttribute('data-w', w);
+    if (!r.width) return;                     // 还没布局完，等下一次
+    typePill.style.height = r.height + 'px';
+    if (!animate) typePill.classList.add('noanim');   // 初始定位不要动
+    // 先强制回流让 noanim / 起始值提交，再写目标值
+    void typePill.offsetWidth;
+    typePill.style.transform = 'translateX(' + (r.left - box.left) + 'px)';
+    typePill.style.width = r.width + 'px';
+    typePill.classList.add('ready');
+    if (!animate) {
+      setTimeout(function(){ typePill.classList.remove('noanim'); }, 40);
     }
   }
   function paintTypes(animate){
@@ -2167,11 +2221,14 @@ function bind(){
   });
 }
 
-/* 量尺寸：只负责把「页头高度」「任务栏高度」写成 CSS 变量给布局用。
-   ⚠️ 不再写 --app-h（body 高度）—— 那条改由 CSS 的 html/body height:100% 决定。
-   原因见 body 规则处的注释：iOS 独立模式下 window.innerHeight 和真实可视区
-   对不齐，用它当 body 高度会让底部漏出一条。 */
+/* 量尺寸：把「body 高度」「页头高度」「任务栏高度」写成 CSS 变量。
+   ⚠️ --app-h 是必需的，别删（2026-10-14 踩过：删掉后底栏又悬空了）。
+   iOS 独立 App 下 100vh/100% 偏小，只有读 window.innerHeight 才和真实可视区对齐；
+   visualViewport 兜底应付地址栏收展。 */
 function setAppHeight(){
+  var h = window.innerHeight;
+  if (window.visualViewport && window.visualViewport.height > h) h = window.visualViewport.height;
+  document.documentElement.style.setProperty('--app-h', h + 'px');
   var head = document.querySelector('header');
   if (head) document.documentElement.style.setProperty('--head-h', head.offsetHeight + 'px');
   var tb = document.querySelector('.tabbar');
