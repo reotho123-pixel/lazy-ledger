@@ -154,16 +154,20 @@ main::-webkit-scrollbar{width:0;}
 
 /* 记录页要三段固定（主卡 / 输入区 / 卡片流），单独用绝对定位铺满，
    高度由 inset 决定，不依赖 100vh（iOS 独立 App 下 100vh 会偏小）。
-   ⚠️ 这里不能有 overflow:hidden —— 主卡的熊 top:-56px、胶带探出 26.6px，
+   ⚠️ top 必须是 0：本元素的包含块是 main 的 padding box，
+   而 main 本来就在页头下方了。之前写 top:calc(--head-h + 8px) 等于
+   把页头高度又加了一遍，卡片上方凭空多出 60px 空白。
+   ⚠️ 也不能有 overflow:hidden —— 主卡的熊 top:-56px、胶带探出 26.6px，
    这一层一裁，熊的头和胶带就没了（.feed 自己会滚，不需要这层再裁）。 */
 #page-record.active{
   position:absolute; z-index:10;
-  top:calc(var(--head-h,52px) + 8px); left:12px; right:12px;
+  top:0; left:12px; right:12px;
   bottom:calc(var(--tab-h,64px) + 8px);
   display:flex; flex-direction:column;
   padding:0; max-width:none; margin:0;
 }
-/* 主卡上方留出熊和胶带探出的空间（熊 56px，取 60px 有余量） */
+/* 主卡上方留出熊和胶带探出的空间（熊 56px）。
+   60px = 56（熊）+ 4（和页头之间的呼吸） */
 #page-record .hero{flex:none; margin-top:60px;}
 #page-record .composer{flex:none;}
 /* feed 是独立滚动容器（overflow-y:auto），卡片上探出卡外的胶带会被它裁掉，
@@ -326,8 +330,10 @@ main::-webkit-scrollbar{width:0;}
 .entry .a.in{color:var(--blue-d);}
 
 /* ---------- 统计页 ---------- */
-/* 上方留出熊探出的 52px（.st-bear top:-52px），否则熊头会被 main 裁掉 */
-.st-hero{padding:15px 16px; margin:56px 0 13px;}
+/* 上方留出熊探出的 52px（.st-bear top:-52px）。
+   ⚠️ 这里是 margin-top，会和 main 的 30px 顶部内边距叠加 ——
+   所以填 26px，合计 56px = 52（熊）+ 4（呼吸）。别按 52 填。 */
+.st-hero{padding:15px 16px; margin:26px 0 13px;}
 .st-hero .lb{font-size:13px; color:var(--ink2);}
 .st-amt{font-size:36px; line-height:1.1; color:var(--ink);}
 .st-bear{
