@@ -323,25 +323,19 @@
   .foot-note{font-size:12.5px; font-weight:700; color:#5a5344; padding:2px 2px 6px;}
 
   /* ---------- 底栏 ---------- */
-  /* fixed + bottom:0 贴屏幕最底 */
+  /* fixed + bottom:0 贴屏幕最底。
+     底部内边距**写死**，不用 env(safe-area-inset-bottom)：
+     iOS 加到主屏后视口已经铺满整屏（含 Home Indicator 那一段），
+     再补一次安全区就是留了两遍 —— 实测文字下方会空掉约 52px，
+     看起来任务栏被顶上去、"悬空一格"。
+     参照「待会吃什么」的底栏：文字下方只留 13px。
+     代价：在 Safari 里浏览时，底部安全区由 Safari 自己的工具栏负责，
+     这里不再额外留白（对本 App 的实际用法——加到主屏——是正确的）。 */
   nav.tabbar{
     position:fixed; left:0; right:0; bottom:0; z-index:40;
     background:var(--paper); border-top:var(--bd);
-    padding:8px;
+    padding:8px 8px 13px;
     display:flex; gap:6px;
-  }
-  /* Safari 标签页模式：底部有工具栏 + Home Indicator，需要留出安全区 */
-  html[data-standalone="0"] nav.tabbar{
-    padding-bottom:calc(8px + env(safe-area-inset-bottom, 0px));
-  }
-  /* 独立 App 模式（添加到主屏幕）：可视区已经包含 Home Indicator 区，
-     再加 safe-area 内边距会把任务栏顶上去，看起来像"悬空一格" */
-  html[data-standalone="1"] nav.tabbar{
-    padding-bottom:8px;
-  }
-  /* JS 尚未跑起来时的兜底（按 Safari 模式处理） */
-  html:not([data-standalone]) nav.tabbar{
-    padding-bottom:calc(8px + env(safe-area-inset-bottom, 0px));
   }
   nav.tabbar .tab{
     flex:1; background:none; border:3px solid transparent; padding:5px 0 6px;
@@ -370,7 +364,8 @@
     width:34px; height:34px; background:var(--paper2); border:var(--bd); font-size:19px;
     display:flex; align-items:center; justify-content:center; padding:0; flex:none;
   }
-  .sheet-body{padding:14px 14px calc(20px + env(safe-area-inset-bottom));}
+  /* 与底栏同理：独立模式下视口已含安全区，不再重复补 */
+  .sheet-body{padding:14px 14px 20px;}
 
   /* ---------- 二次确认层（替代 confirm） ---------- */
   #cfm{position:fixed; inset:0; background:rgba(17,17,17,.55); z-index:80;
@@ -448,7 +443,7 @@
   .badge.p{background:var(--pink);}
 
   #toast{
-    position:fixed; left:50%; bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 26px);
+    position:fixed; left:50%; bottom:calc(var(--tabbar-h) + 26px);
     transform:translateX(-50%) translateY(10px); z-index:90; opacity:0; pointer-events:none;
     background:var(--ink); color:#fff; font-size:14px; font-weight:900; padding:11px 20px;
     border:var(--bd); box-shadow:var(--sh-sm); max-width:86vw; text-align:center;
