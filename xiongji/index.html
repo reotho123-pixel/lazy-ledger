@@ -10,50 +10,44 @@
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" type="image/png" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<!-- 鎵嬪啓浣擄細绔欓叿蹇箰浣擄紝93 涓瓙闆嗗叏閮ㄦ湰鍦版墦鍖咃紝绂荤嚎鍙敤銆佹棤澶栭摼 -->
+<link rel="stylesheet" href="./fonts/zcoolkuaile.css">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="熊记">
 <style>
+  /* ==========================================================================
+     熊记 · 手账拼贴风（蓝粉双拼）
+     配色取自用户参考图：薄荷蓝波点底 + 米白纸卡 + 粉色点缀
+       主粉 #F58BA8   浅粉 #FFE3EA   深粉字 #D9557A
+       淡蓝 #E8F6F8   描边 #9CCBD9   正文 #5A7C8C
+     ⚠️ 只改表现层。JS 依赖的 93 个 id / 141 个 class 名字全部保持原样。
+     ========================================================================== */
   :root{
-    --paper:#B5DEE6;      /* 薄荷蓝页面底 */
-    --paper2:#FFFFFF;     /* 白色卡片 */
-    --ink:#4C6570;        /* 深灰蓝文字 */
-    --mint:#5DC2AE;       /* 收入绿 */
-    --pink:#F58BA8;       /* 主色粉 */
-    --pink-l:#FFE3EA;
-    --muted:#8FA8B0;      /* 次要文字 */
-    --av-bg:#E8F6F8;      /* 图标底板 */
-    --nav-idle:#9FB6BD;
+    --paper:#B5DEE6;      /* 页面底：薄荷蓝 + 白波点 */
+    --paper2:#FFFFFF;     /* 卡片纸 */
+    --ink:#5A7C8C;        /* 正文（蓝灰） */
+    --ink2:#8AA5B2;       /* 次要文字 */
+    --mint:#6FAEC4;       /* 收入：蓝（原绿，蓝粉双拼里改用蓝） */
+    --pink:#F58BA8;       /* 主粉 */
+    --pink-l:#FFE3EA;     /* 浅粉 */
+    --pink-d:#D9557A;     /* 深粉（浅粉底上的字） */
+    --muted:#8AA5B2;
+    --av-bg:#E8F6F8;      /* 淡蓝底（图标板 / 输入框） */
+    --nav-idle:#A9C6D0;
+    --line:#9CCBD9;       /* 虚线描边 */
+    --line-soft:#CFE8EF;
     --bd:none;
-    --sh:0 6px 18px rgba(70,120,132,.13);
-    --sh-sm:0 3px 10px rgba(70,120,132,.13);
-    --r-lg:24px;
-    --r-md:20px;
-    --r-sm:14px;
+    --sh:0 2px 0 rgba(150,196,212,.40);
+    --sh-sm:0 2px 0 rgba(150,196,212,.32);
+    --r-lg:18px;
+    --r-md:15px;
+    --r-sm:12px;
     --tabbar-h:64px;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
-  /* 禁止双指捏合缩放（加进主屏后捏小会露出白边，看着像网页）。
-     viewport 的 user-scalable=no 在 iOS 上会被忽略，touch-action 才管用；
-     双击放大也用这条压掉（别用 touchend preventDefault，会吃掉 click）。 */
-  html,body{touch-action:pan-x pan-y; overscroll-behavior:none;}
-  /* ⚠️底部那条纯色带只在【独立 App 模式】下才存在，浏览器里不该有 */
-  /* 背景：独立 App 模式下网页视口比屏幕矮约 47pt（实测：胶囊 CSS `bottom:10px`，
-     截图量得胶囊下缘距屏幕底 57pt ⇒ 视口底边距屏幕底约 47pt）。那 47pt 是 iOS 的
-     窗口背景区，网页渲染不到，只能由系统按 manifest 的 background_color 填色。
-     证据链（2026-10-13 实验结论）：那条带整行 0 个白像素（波点画不进去）；
-     它的颜色严格跟随 manifest 而非页面；把 html 高度压到 600px 后，
-     视口内底部波点依旧完整 ⇒ 那条带在画布之外。
-     ✅ 做法：只在独立模式下让波点在视口底部平滑淡出，与系统那条纯色带无缝相接。
-     🚫 不能让这条渐隐在浏览器/普通模式下也生效 —— 那会在胶囊下方凭空造出一条
-        没有波点的纯色带（用户报的"背景没有铺满"就是这个）。所以用 data-standalone
-        区分：standalone=1 才渐隐；standalone=0（浏览器）波点一路铺到最底。 */
-  html{
-    -webkit-text-size-adjust:100%; overflow-anchor:none; height:100%; overflow:hidden;
-    /* 画布底色 = 页面纸色（系统画那条带时取的就是这个值） */
-    background-color:var(--paper);
-  }
+  html{-webkit-text-size-adjust:100%; overflow-anchor:none; height:100%; overflow:hidden;}
   /* 三段式布局：标题 / 内容区（独立滚动）/ 输入栏 / 任务栏
      高度策略（按可靠性排序，JS 会覆盖成精确像素值）：
        1) JS 读 window.innerHeight 写进 --app-h（最准，iOS 独立 App 也准）
@@ -63,32 +57,17 @@
     height:100%;
     height:var(--app-h, 100%);
     margin:0; color:var(--ink);
-    /* 保持透明：底色在 html，波点在下面的 ::before 层 */
-    background:transparent;
-    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    /* 薄荷蓝底 + 白色圆点纹理（手账拼贴风） */
+    background-color:var(--paper);
+    background-image:radial-gradient(#FFFFFF 2.2px, transparent 2.5px);
+    background-size:14px 14px;
+    /* 手写体：站酷快乐体本地打包，离线可用；后面是系统兜底 */
+    font-family:'ZCOOL KuaiLe',-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
     line-height:1.45;
-    font-weight:600;
+    font-weight:400;
     display:flex; flex-direction:column;
     overflow:hidden;
     overflow-anchor:none;
-  }
-  /* 波点层：固定铺满视口。
-     🚫 默认不做底部渐隐 —— 浏览器里要做成整屏一块波点，一路铺到最底。 */
-  body::before{
-    content:''; position:fixed; left:0; right:0; top:0; bottom:0;
-    z-index:-1; pointer-events:none;
-    background-image:radial-gradient(#FFFFFF 2.2px, transparent 2.5px);
-    background-size:14px 14px;
-    background-repeat:repeat;
-  }
-  /* 只有独立 App 模式才在底部渐隐：那里有约 47pt 是 iOS 系统的窗口背景区，
-     网页画不进去、由系统填成 manifest 的纯薄荷色。波点硬切会留下一条
-     「有波点 → 没波点」的横线，所以让它柔和收掉、与系统那条无缝相接。
-     渐隐起点在胶囊上方一点，绝大部分被胶囊遮住。
-     ⚠️ 不要加大这个值：v1.1.3 用过 170px，制造了一大片没波点的区域。 */
-  html[data-standalone="1"] body::before{
-    -webkit-mask-image:linear-gradient(to bottom, #000 calc(100% - 58px), transparent 100%);
-    mask-image:linear-gradient(to bottom, #000 calc(100% - 58px), transparent 100%);
   }
   /* 金额 / 统计数字：等宽对齐 + 紧字距 */
   .big-amt,.cc-amt,.rec-amt,.sum-card .amt,.st-hero .big,.cell .v,
@@ -96,88 +75,59 @@
     font-variant-numeric:tabular-nums;
     letter-spacing:-1px;
   }
-  button{font-family:inherit; font-weight:800; color:var(--ink); cursor:pointer; border:none; background:none;}
-  input,select,textarea{font-family:inherit; font-weight:700; color:var(--ink);}
+  button{font-family:inherit; font-weight:400; color:var(--ink); cursor:pointer; border:none; background:none;}
+  input,select,textarea{font-family:inherit; font-weight:400; color:var(--ink);}
 
-  /* ---------- 通用盒子 ---------- */
-  .box{background:var(--paper2); border-radius:var(--r-lg); box-shadow:var(--sh);}
+  /* ---------- 通用盒子（手账纸卡：虚线描边 + 硬阴影） ---------- */
+  .box{background:var(--paper2); border:1.5px dashed var(--line); border-radius:var(--r-lg); box-shadow:var(--sh);}
   .pad{padding:14px;}
 
-  /* ---------- 顶栏（三段布局的第一段）----------
-     只保留一个居中的日期按钮（上面贴一张熊贴纸），点了从按钮形变展开月份面板。 */
+  /* ---------- 顶栏（三段布局的第一段） ---------- */
   header{
     flex:none; z-index:35;
     background:transparent;
-    padding:calc(10px + env(safe-area-inset-top)) 12px 6px;
-    display:flex; align-items:center; justify-content:center;
+    padding:calc(10px + env(safe-area-inset-top)) 12px 2px;
+    display:flex; align-items:center; gap:8px;
   }
-  /* 日期按钮 = 月选择面板的形变源（起点矩形由 getBoundingClientRect 实时量） */
-  .date-chip{
-    position:relative;
-    background:var(--paper2); border-radius:999px; box-shadow:var(--sh-sm);
-    padding:9px 20px 9px 15px; display:flex; align-items:center; gap:8px;
-    font-size:15px; font-weight:800; color:var(--ink); letter-spacing:.5px;
+  .pg-title{
+    background:var(--paper2); border:1.5px dashed var(--line); border-radius:999px; box-shadow:var(--sh-sm);
+    padding:7px 18px; font-size:16px; letter-spacing:2px;
+    color:var(--ink); position:relative; flex:none;
   }
-  .date-chip .date-text{white-space:nowrap;}
-  /* 日期上的熊贴纸（轻微倾斜，像贴纸贴上去） */
-  .date-chip .date-sticker{
-    width:26px; height:26px; flex:none; margin-left:-4px;
-    display:flex; align-items:center; justify-content:center;
-    transform:rotate(-10deg);
+  /* 标题右上角的小熊（举花球那只，和样板一致） */
+  .pg-title::after{content:''; position:absolute; right:-2px; top:-15px; width:36px; height:32px;
+    background:url('./bears/hero-happy.png') no-repeat center/contain; pointer-events:none;}
+  .pg-dot{width:12px; height:12px; border-radius:50%; flex:none; margin-left:6px; background:var(--pink);}
+  .pg-chip{
+    margin-left:auto; background:var(--paper2); border:1.5px dashed var(--line); border-radius:999px; box-shadow:var(--sh-sm);
+    padding:6px 14px; font-size:12.5px; white-space:nowrap; color:var(--muted);
   }
-  .date-chip .date-sticker img{width:100%; height:100%; object-fit:contain;}
-  /* 小三角提示「可点」 */
-  .date-chip .date-caret{
-    width:0; height:0; flex:none;
-    border-left:5px solid transparent; border-right:5px solid transparent;
-    border-top:6px solid var(--muted); margin-left:1px;
-  }
-
-  /* ---------- 月份选择面板（Trigger Morph：从日期按钮长出来） ---------- */
-  .dp-mask{
-    position:fixed; inset:0; z-index:70;
-    background:rgba(76,101,112,.42);
-    opacity:0; pointer-events:none; transition:opacity .28s ease;
-  }
-  .dp-mask.show{opacity:1; pointer-events:auto;}
-  .dp-panel{
-    position:fixed; z-index:71; overflow:hidden;
-    background:var(--paper2); box-shadow:var(--sh);
-    display:none;   /* 展开时由 JS 打开 */
-  }
-  .dp-panel.show{display:block;}
-  .dp-inner{padding:16px; opacity:0;}   /* 内容延迟淡入，避免被拉伸变形 */
-  .dp-year{display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:14px;}
-  .dp-year .dp-y{font-size:17px; font-weight:800; letter-spacing:1px; min-width:84px; text-align:center;}
-  .dp-year .dp-yb{
-    width:34px; height:34px; border-radius:50%; background:var(--av-bg);
-    box-shadow:var(--sh-sm); font-size:17px; font-weight:800;
+  .pg-chip.pink{color:var(--pink-d);}
+  .pg-nav{display:flex; align-items:center; gap:6px; margin-left:auto;}
+  .pg-nav .nb{
+    width:32px; height:32px; background:var(--paper2); border:1.5px dashed var(--line); border-radius:50%;
+    box-shadow:var(--sh-sm); font-size:17px; color:var(--ink);
     display:flex; align-items:center; justify-content:center; padding:0;
   }
-  .dp-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:9px;}
-  .dp-cell{
-    padding:11px 4px; border-radius:var(--r-sm); background:var(--av-bg);
-    font-size:14px; font-weight:800; text-align:center; color:var(--ink);
-  }
-  .dp-cell.on{background:var(--pink-l); color:var(--pink);}
-  .dp-cell.future{opacity:.35;}
-  .dp-today{margin-top:14px;}
+  /* 月份文字原来用 --paper2（白）写在蓝底上，看不见；改深蓝 */
+  .pg-nav .ym{font-size:14px; white-space:nowrap; padding:0 4px; color:var(--ink);}
 
-  /* 内容区：三段布局的第二段，独立滚动 */
+  /* 内容区：三段布局的第二段，独立滚动
+     ⚠️ 顶部留 14px：卡片上的胶带是 top:-11px 探出卡外的，
+     本容器 overflow-y:auto 会把超出部分裁掉（样板里踩过这个坑）。 */
   main{
     flex:1 1 auto; min-height:0;
     overflow-y:auto; -webkit-overflow-scrolling:touch;
     max-width:660px; width:100%; margin:0 auto;
-    padding:12px;
+    padding:14px 12px 12px;
     position:relative;
   }
   /* 对话页：绝对定位铺满内容区 —— 高度由 inset 决定，
-     不依赖 100% / 100vh / 100dvh（这些在 iOS 独立 App 下都不可靠）。
-     底栏是浮动胶囊（离屏幕底 10px），所以留白要加上那段间距。 */
+     不依赖 100% / 100vh / 100dvh（这些在 iOS 独立 App 下都不可靠） */
   #page-chat.active{
     position:absolute;
-    top:8px; left:12px; right:12px;
-    bottom:calc(var(--tab-h, 92px) + 24px);
+    top:14px; left:12px; right:12px;
+    bottom:calc(var(--tab-h, 92px) + 6px);
     display:flex; flex-direction:column;
     overflow:hidden;
   }
@@ -186,170 +136,177 @@
   #page-chat #chatFeed{flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;}
   .page{display:none;}
   .page.active{display:block;}
-  /* 非对话页：底部留出浮动胶囊的高度 + 它离屏幕底的那段间距 */
+  /* 非对话页：底部留出任务栏高度，内容不被 Fixed 任务栏遮住 */
   #page-list.active, #page-stats.active, #page-me.active{
-    padding-bottom:calc(var(--tab-h, 92px) + 24px);
+    padding-bottom:calc(var(--tab-h, 92px) + 6px);
   }
 
   /* ---------- 对话页 ---------- */
   .chat-hero{
     position:relative;
-    background:var(--paper2); border-radius:var(--r-lg); box-shadow:var(--sh);
+    background:var(--paper2); border:1.5px dashed var(--line); border-radius:var(--r-lg); box-shadow:var(--sh);
     padding:14px 16px 12px; margin:52px 0 14px;
   }
-  /* 主卡右上角：三只一起的大图（重度标志性元素） */
+  /* 主卡右上角：三只一起的大图 + 一片斜贴胶带 */
   .chat-hero::after{
-    content:''; position:absolute; right:6px; top:-50px; width:158px; height:112px;
-    background:url('./bears/b2_info.png') no-repeat center/contain; pointer-events:none;
+    content:''; position:absolute; right:2px; top:-50px; width:150px; height:106px;
+    background:url('./bears/hero-cash.png') no-repeat center/contain; pointer-events:none;
   }
-  /* 笔数标签紧跟标题左对齐：右上角留给三只熊，避免遮挡 */
-  .chat-hero .hh{display:flex; align-items:center; justify-content:flex-start; gap:8px;}
-  .chat-hero .hh .lb{font-size:12.5px; font-weight:700; color:var(--muted);}
-  .tag-y{background:var(--av-bg); border-radius:999px; padding:3px 11px; font-size:11.5px; font-weight:800; color:var(--ink);}
-  .big-amt{font-size:42px; font-weight:800; letter-spacing:-1px; line-height:1.1; margin:2px 0 10px; color:var(--pink);}
-  .big-amt small{font-size:24px; font-weight:800;}
-  .hero-rule{height:1px; background:rgba(143,168,176,.28); margin:10px 0;}
+  /* 胶带（全贴）：横跨卡片左上角 —— 一半压在卡片上、一半探到卡片外。
+     粉色要够深才在白卡上读得出来（浅粉会和白卡同色而"隐形"）。 */
+  .chat-hero::before,.st-hero::before,.sum-card::before{
+    content:''; position:absolute; left:-8px; top:-11px; width:58px; height:21px;
+    border-radius:2px;
+    background:linear-gradient(135deg,#FDDCE6 0%,#FAC9D8 52%,#F7BCCE 100%);
+    border:1px solid rgba(240,163,186,.75);
+    transform:rotate(-38deg);
+    box-shadow:0 2px 4px rgba(120,175,195,.30);
+    pointer-events:none; z-index:2;
+  }
+  .chat-hero .hh{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+  .chat-hero .hh .lb{font-size:12.5px; color:var(--muted);}
+  .tag-y{background:var(--pink-l); border:1px solid rgba(245,139,168,.5); border-radius:999px;
+    padding:3px 11px; font-size:11.5px; color:var(--pink-d);}
+  .big-amt{font-size:42px; letter-spacing:-1px; line-height:1.1; margin:2px 0 10px; color:var(--ink);}
+  .big-amt small{font-size:24px;}
+  .hero-rule{height:0; border-top:1.5px dashed var(--line-soft); margin:10px 0;}
   .hero-split{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
-  .hero-split .it .k{font-size:10.5px; font-weight:600; color:var(--muted);}
-  .hero-split .it .v{font-size:14px; font-weight:800; margin-top:2px; color:var(--ink);}
+  .hero-split .it .k{font-size:10.5px; color:var(--muted);}
+  .hero-split .it .v{font-size:14px; margin-top:2px; color:var(--ink);}
   .hero-dots{
-    margin-top:12px; height:8px; border-top:2px dotted rgba(143,168,176,.4);
-    display:flex; align-items:flex-end; gap:5px; padding-top:3px; overflow:hidden;
+    margin-top:12px; height:8px; border-top:2px dotted var(--line); display:flex; align-items:flex-end; gap:5px;
+    padding-top:3px; overflow:hidden;
   }
-  .hero-dots i{display:block; width:5px; height:5px; border-radius:50%; background:var(--muted); opacity:.35;}
+  .hero-dots i{display:block; width:5px; height:5px; border-radius:50%; background:var(--pink); opacity:.35;}
 
   .bubble-wrap{display:flex; justify-content:flex-end; margin-bottom:12px;}
   .bubble{
     background:var(--pink-l); border-radius:var(--r-md); box-shadow:var(--sh-sm);
-    padding:10px 14px; font-size:14px; font-weight:700; max-width:80%;
+    padding:10px 14px; font-size:14px; max-width:80%;
   }
   .bubble.left{background:var(--paper2); margin-right:auto;}
 
   .chat-card{
     position:relative;
-    border-radius:var(--r-lg); box-shadow:var(--sh); background:var(--paper2);
+    border:1.5px dashed var(--line); border-radius:var(--r-lg); box-shadow:var(--sh); background:var(--paper2);
     margin-bottom:12px; padding:12px 14px; cursor:pointer;
   }
-  /* 卡片右下角的淡熊（重度装饰，不盖文字） */
+  /* 卡片右下角的淡熊（不盖文字） */
   .chat-card::after{
     content:''; position:absolute; right:10px; bottom:44px; width:56px; height:52px;
-    background:url('./bears/b1_faq.png') no-repeat center/contain;
+    background:url('./bears/hero-read.png') no-repeat center/contain;
     opacity:.2; pointer-events:none; z-index:0;
   }
-  /* ---------- 记录卡片堆叠滚动（Stacked Card Scroll）----------
-     规格见 ~/.agents/skills/app-interaction-design/references/interaction-patterns.md 第 9 条。
-     做法要点（照搬参考里实测通过的版本）：
-       · 每张卡 position:sticky + 内联 top 阶梯 → 自然吸顶
-       · 吸顶后的 scale / 上移 / opacity / zIndex 全部由真实 scrollTop 算出，天然可逆
-       · 缩放下限 0.9、透明度下限 0.6，保证文字可读
-     卡片尺寸由 JS 统一写死高度，节距才可预测。 */
-  #chatFeed{position:relative;}
-  .stack-card{
-    position:sticky;
-    margin-bottom:12px;
-    transform-origin:50% 0%;
-    will-change:transform, opacity;
-    backface-visibility:hidden;
-  }
-  /* 最后一张卡后面的留白，否则它滚不到吸顶位 */
-  .stack-tail{height:44vh; pointer-events:none;}
   .cc-top{display:flex; align-items:center; gap:11px; position:relative; z-index:1;}
   .cc-emoji{
     width:54px; height:54px; border-radius:var(--r-sm); flex:none;
-    background:var(--av-bg); display:flex; align-items:center; justify-content:center;
+    background:var(--av-bg); border:1.5px dashed var(--line-soft);
+    display:flex; align-items:center; justify-content:center;
     font-size:26px; overflow:hidden;
   }
   .cc-emoji img{max-width:78%; max-height:80%; object-fit:contain;}
   .cc-mid{flex:1; min-width:0;}
-  .cc-cat{font-size:16px; font-weight:800;}
-  .cc-sub{font-size:11.5px; font-weight:600; color:var(--muted); margin-top:1px;}
-  .cc-amt{font-size:28px; font-weight:800; letter-spacing:-.5px; margin-top:6px; color:var(--pink); position:relative; z-index:1;}
+  .cc-cat{font-size:16px;}
+  .cc-sub{font-size:11.5px; color:var(--muted); margin-top:1px;}
+  .cc-amt{font-size:28px; letter-spacing:-.5px; margin-top:6px; color:var(--pink); position:relative; z-index:1;}
   .cc-amt.in{color:var(--mint);}
   .chip-tag{
-    border-radius:999px; box-shadow:var(--sh-sm); padding:4px 12px; font-size:11.5px; font-weight:800;
-    background:var(--pink-l); color:var(--pink); flex:none;
+    border-radius:999px; box-shadow:var(--sh-sm); padding:4px 12px; font-size:11.5px;
+    background:var(--pink-l); color:var(--pink-d); border:1px solid rgba(245,139,168,.5); flex:none;
   }
-  .chip-tag.in{background:#DFF4EE; color:var(--mint);}
-  .cc-rule{height:1px; background:rgba(143,168,176,.28); margin:10px 0;}
+  .chip-tag.in{background:var(--av-bg); color:var(--mint); border-color:var(--line);}
+  .cc-rule{height:0; border-top:1.5px dashed var(--line-soft); margin:10px 0;}
   .cc-foot{display:flex; align-items:center; justify-content:space-between; gap:10px;
-    font-size:12px; font-weight:700; color:var(--muted); position:relative; z-index:1;}
+    font-size:12px; color:var(--muted); position:relative; z-index:1;}
   .cc-edit,.cc-del{
-    border-radius:999px; box-shadow:var(--sh-sm); background:var(--av-bg);
-    padding:5px 13px; font-size:12px; font-weight:800; color:var(--ink);
+    border-radius:999px; box-shadow:var(--sh-sm); background:var(--av-bg); border:1.5px dashed var(--line-soft);
+    padding:5px 13px; font-size:12px; color:var(--ink);
   }
-  .cc-del{background:var(--pink-l); color:var(--pink);}
+  .cc-edit:active,.cc-del:active{transform:scale(.94);}
+  .cc-del{background:var(--pink-l); color:var(--pink-d); border-color:rgba(245,139,168,.5);}
 
   .quick-row{display:flex; flex-wrap:wrap; gap:9px; margin-bottom:12px;}
   .quick{
-    background:var(--paper2); border-radius:999px; box-shadow:var(--sh-sm);
-    padding:9px 15px; font-size:13px; font-weight:700;
+    background:var(--paper2); border:1.5px dashed var(--line); border-radius:999px; box-shadow:var(--sh-sm);
+    padding:9px 15px; font-size:13px;
   }
+  .quick:active{transform:scale(.95);}
 
   /* 记账输入区：贴在主卡下方，固定不动（不参与滚动） */
   .composer{
     flex:none;
-    background:var(--paper2); border-radius:var(--r-lg); box-shadow:var(--sh);
+    background:var(--paper2); border:1.5px dashed var(--line); border-radius:var(--r-lg); box-shadow:var(--sh);
     padding:12px;
     margin-bottom:14px;
   }
   .composer-btns{display:flex; gap:9px; margin-bottom:10px;}
+  /* 粉色深浅搭配：浅粉底配深粉字（支出＝主动作）；收入走淡蓝做蓝粉对照 */
   .cbtn{
     flex:1; border-radius:999px; box-shadow:var(--sh-sm); background:var(--av-bg);
-    padding:10px; font-size:14px; font-weight:800; color:var(--muted);
+    border:1.5px solid var(--line);
+    padding:10px; font-size:14px; color:var(--muted);
   }
-  .cbtn.on-ex{background:var(--pink-l); color:var(--pink);}
-  .cbtn.on-in{background:#DFF4EE; color:var(--mint);}
+  .cbtn:active{transform:scale(.97);}
+  .cbtn.on-ex{background:var(--pink-l); color:var(--pink-d); border-color:#FBC4D4;}
+  .cbtn.on-in{background:var(--av-bg); color:#5FA0B8; border-color:var(--blue-d,#7FB8CC);}
 
   .input-row{display:flex; gap:9px; align-items:stretch;}
   .input-row input{
-    flex:1; min-width:0; border:none; border-radius:999px; box-shadow:var(--sh-sm); background:var(--av-bg);
-    padding:13px 16px; font-size:15px; font-weight:600;
+    flex:1; min-width:0; border:1.5px dashed var(--line); border-radius:999px; box-shadow:var(--sh-sm); background:var(--paper2);
+    padding:13px 16px; font-size:15px;
   }
-  .input-row input::placeholder{color:var(--nav-idle); font-weight:600;}
+  .input-row input::placeholder{color:var(--nav-idle);}
+  /* 深粉底配白箭头（参考图里那个粉圆按钮的做法） */
   .send-btn{
-    width:52px; flex:none; background:var(--pink); border-radius:50%; box-shadow:var(--sh-sm);
-    font-size:22px; font-weight:800; color:#fff;
+    width:52px; flex:none; background:var(--pink); border:1.5px solid var(--pink); border-radius:50%;
+    box-shadow:0 2px 0 rgba(217,85,122,.35);
+    font-size:22px; color:#fff;
     display:flex; align-items:center; justify-content:center; padding:0;
   }
-
+  .send-btn:active{transform:scale(.94);}
 
   /* ---------- 账本页 ---------- */
-  .sum-card{border-radius:var(--r-lg); box-shadow:var(--sh); background:var(--paper2); padding:14px 16px; margin-bottom:12px;}
+  .sum-card{position:relative; border:1.5px dashed var(--line); border-radius:var(--r-lg); box-shadow:var(--sh);
+    background:var(--paper2); padding:14px 16px; margin-bottom:12px;}
   .sum-card .top{display:flex; align-items:flex-start; justify-content:space-between; gap:10px;}
-  .sum-card .lb{font-size:12.5px; font-weight:700; color:var(--muted);}
-  .sum-card .amt{font-size:38px; font-weight:800; letter-spacing:-1px; line-height:1.15; color:var(--pink);}
-  .sum-card .bal{font-size:12.5px; font-weight:700; color:var(--muted); text-align:right;}
-  .cnt-tag{background:var(--av-bg); border-radius:999px; padding:4px 11px; font-size:11.5px; font-weight:800; color:var(--ink);}
+  .sum-card .lb{font-size:12.5px; color:var(--muted);}
+  .sum-card .amt{font-size:38px; letter-spacing:-1px; line-height:1.15; color:var(--ink);}
+  .sum-card .bal{font-size:12.5px; color:var(--muted); text-align:right;}
+  .cnt-tag{background:var(--pink-l); border:1px solid rgba(245,139,168,.5); border-radius:999px;
+    padding:4px 11px; font-size:11.5px; color:var(--pink-d);}
 
-  .day-block{border-radius:var(--r-lg); box-shadow:var(--sh); background:var(--paper2); margin-bottom:12px; overflow:hidden;}
+  .day-block{border:1.5px dashed var(--line); border-radius:var(--r-lg); box-shadow:var(--sh);
+    background:var(--paper2); margin-bottom:12px; overflow:hidden;}
   .day-head{
     display:flex; align-items:center; justify-content:space-between; gap:10px;
     padding:11px 15px; background:var(--av-bg);
+    border-bottom:1.5px dashed var(--line-soft);
   }
-  .day-head .d1{font-size:15px; font-weight:800;}
-  .day-head .d2{font-size:11px; font-weight:600; color:var(--muted);}
-  .day-head .dsum{font-size:14px; font-weight:800; color:var(--pink);}
+  .day-head .d1{font-size:15px;}
+  .day-head .d2{font-size:11px; color:var(--muted);}
+  .day-head .dsum{font-size:14px; color:var(--pink);}
   .rec-row{
     position:relative; display:flex; align-items:center; gap:11px; padding:11px 15px;
-    border-bottom:1px solid rgba(143,168,176,.16); cursor:pointer;
+    border-bottom:1.5px dashed var(--line-soft); cursor:pointer;
   }
   .rec-row:last-child{border-bottom:none;}
   .rec-row:active{background:var(--av-bg);}
-  /* 记录行右端的淡熊（重度装饰） */
+  /* 记录行右端的淡熊 */
   .rec-row::after{
     content:''; position:absolute; right:14px; top:50%; transform:translateY(-50%);
     width:38px; height:36px;
-    background:url('./bears/b3_wave.png') no-repeat center/contain;
+    background:url('./bears/hero-sleep.png') no-repeat center/contain;
     opacity:.22; pointer-events:none; z-index:0;
   }
-  .rec-time{font-size:11.5px; font-weight:700; width:40px; flex:none; color:var(--muted);}
-  .rec-icon{width:38px; height:38px; border-radius:11px; background:var(--av-bg); flex:none;
+  .rec-time{font-size:11.5px; width:40px; flex:none; color:var(--muted);}
+  .rec-icon{width:38px; height:38px; border-radius:11px; background:var(--av-bg);
+    border:1.5px dashed var(--line-soft); flex:none;
     display:flex; align-items:center; justify-content:center; font-size:19px; overflow:hidden;}
   .rec-icon img{max-width:76%; max-height:78%; object-fit:contain;}
   .rec-mid{flex:1; min-width:0; position:relative; z-index:1;}
-  .rec-cat{font-size:14.5px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .rec-note{font-size:11px; font-weight:600; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .rec-amt{font-size:15px; font-weight:800; flex:none; letter-spacing:-.3px; color:var(--pink); position:relative; z-index:1;}
+  .rec-cat{font-size:14.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .rec-note{font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .rec-amt{font-size:15px; flex:none; letter-spacing:-.3px; color:var(--pink); position:relative; z-index:1;}
   .rec-amt.in{color:var(--mint);}
   .auto-dot{display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--mint); margin-right:5px; vertical-align:1px;}
   .pend-dot{display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--pink); margin-right:5px; vertical-align:1px;}
@@ -357,276 +314,399 @@
   .empty{padding:26px 16px 34px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:8px;}
   .empty .big{font-size:44px; line-height:1;}
   .empty .big img{width:96px; height:auto; object-fit:contain;}
-  .empty .t{font-size:13px; font-weight:700; color:var(--muted);}
+  .empty .t{font-size:13px; color:var(--muted);}
 
   /* ---------- 统计页 ---------- */
   .st-hero{
     position:relative;
-    background:var(--paper2); border-radius:var(--r-lg); box-shadow:var(--sh);
+    background:var(--paper2); border:1.5px dashed var(--line); border-radius:var(--r-lg); box-shadow:var(--sh);
     padding:16px; margin:52px 0 12px;
   }
   .st-hero::after{
-    content:''; position:absolute; right:8px; top:-46px; width:132px; height:96px;
-    background:url('./bears/b2_info.png') no-repeat center/contain; pointer-events:none;
+    content:''; position:absolute; right:8px; top:-46px; width:128px; height:92px;
+    background:url('./bears/hero-think.png') no-repeat center/contain; pointer-events:none;
   }
-  .st-hero .lb{font-size:12.5px; font-weight:700; color:var(--muted);}
-  .st-hero .big{font-size:42px; font-weight:800; letter-spacing:-1px; line-height:1.1; margin-top:2px; color:var(--pink);}
+  .st-hero .lb{font-size:12.5px; color:var(--muted);}
+  .st-hero .big{font-size:42px; letter-spacing:-1px; line-height:1.1; margin-top:2px; color:var(--ink);}
   .st-hero .row{display:flex; align-items:flex-start; justify-content:space-between; gap:10px;}
   .grid2{display:grid; grid-template-columns:1fr 1fr; gap:11px; margin-bottom:12px;}
-  .cell{border-radius:var(--r-md); box-shadow:var(--sh-sm); background:var(--paper2); padding:13px;}
-  .cell .k{font-size:11.5px; font-weight:700; color:var(--muted);}
-  .cell .v{font-size:22px; font-weight:800; margin-top:2px; letter-spacing:-.5px;}
+  .cell{border:1.5px dashed var(--line); border-radius:var(--r-md); box-shadow:var(--sh-sm); background:var(--paper2); padding:13px;}
+  .cell .k{font-size:11.5px; color:var(--muted);}
+  .cell .v{font-size:22px; margin-top:2px; letter-spacing:-.5px;}
   .cell .v.sm{font-size:18px;}
 
-  .sec{border-radius:var(--r-lg); box-shadow:var(--sh); background:var(--paper2); padding:14px 16px; margin-bottom:12px;}
+  .sec{border:1.5px dashed var(--line); border-radius:var(--r-lg); box-shadow:var(--sh);
+    background:var(--paper2); padding:14px 16px; margin-bottom:12px;}
   .sec-head{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px;}
-  .sec-head .t{font-size:16px; font-weight:800;}
+  .sec-head .t{font-size:16px;}
   .cat-line{margin-bottom:13px;}
   .cat-line:last-child{margin-bottom:0;}
-  .cat-top{display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:800;}
+  .cat-top{display:flex; align-items:center; gap:8px; font-size:13.5px;}
   .cat-top .em{width:26px; height:26px; border-radius:9px; background:var(--av-bg); flex:none;
+    border:1.3px dashed var(--line-soft);
     display:flex; align-items:center; justify-content:center; font-size:15px; overflow:hidden;}
   .cat-top .em img{max-width:78%; max-height:78%; object-fit:contain;}
-  .cat-top .amt{margin-left:auto; font-size:13.5px; font-weight:800;}
-  .cat-top .pct{font-size:11.5px; font-weight:700; color:var(--muted); width:36px; text-align:right;}
-  .cat-bar{height:14px; border-radius:999px; background:var(--av-bg); margin-top:7px; overflow:hidden; display:flex;}
+  .cat-top .amt{margin-left:auto; font-size:13.5px;}
+  .cat-top .pct{font-size:11.5px; color:var(--muted); width:36px; text-align:right;}
+  .cat-bar{height:14px; border-radius:999px; background:var(--av-bg); border:1px solid var(--line-soft);
+    margin-top:7px; overflow:hidden; display:flex;}
   .cat-bar i{display:block; height:100%; border-radius:999px;}
   .cat-bar i.rest{flex:1;}
 
-  .bud-line{height:16px; border-radius:999px; background:var(--av-bg); overflow:hidden; display:flex;}
-  .bud-line i{display:block; height:100%; background:var(--mint); border-radius:999px;}
+  .bud-line{height:16px; border-radius:999px; background:var(--av-bg); border:1px solid var(--line-soft);
+    overflow:hidden; display:flex;}
+  /* 预算条：粉渐变（浅粉→主粉） */
+  .bud-line i{display:block; height:100%; background:linear-gradient(90deg,#FBC4D4,#F58BA8); border-radius:999px;}
   .bud-line i.rest{flex:1; background:transparent;}
   .bud-foot{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:9px;
-    font-size:12.5px; font-weight:700; color:var(--muted);}
+    font-size:12.5px; color:var(--muted);}
 
   .mbars{display:flex; align-items:flex-end; gap:8px; height:150px; padding-top:24px;}
   .mcol{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; cursor:pointer; position:relative;}
-  .mcol .v{position:absolute; top:-16px; font-size:10px; font-weight:800; white-space:nowrap;}
+  .mcol .v{position:absolute; top:-16px; font-size:10px; white-space:nowrap;}
   .mcol .b{width:100%; border-radius:8px; background:var(--pink); min-height:4px; box-shadow:var(--sh-sm);}
   .mcol.on .b{background:var(--mint);}
-  .mcol .l{font-size:11px; font-weight:800; margin-top:6px; color:var(--muted);}
-  .mcol.on .l{background:var(--paper2); border-radius:999px; padding:1px 7px; color:var(--ink);}
+  .mcol .l{font-size:11px; margin-top:6px; color:var(--muted);}
+  .mcol.on .l{background:var(--pink-l); border:1px solid rgba(245,139,168,.5); border-radius:999px;
+    padding:1px 7px; color:var(--pink-d);}
 
-  .dchart{display:flex; align-items:flex-end; gap:3px; height:80px; border-bottom:1px solid rgba(143,168,176,.3);}
-  .dchart .db{flex:1; min-width:2px; background:#93D6E2; border-radius:3px 3px 0 0; min-height:2px;}
-  .dchart .db.zero{background:rgba(143,168,176,.28); height:2px !important;}
+  .dchart{display:flex; align-items:flex-end; gap:3px; height:80px; border-bottom:1.5px dashed var(--line);}
+  .dchart .db{flex:1; min-width:2px; background:#AFDCE8; border-radius:3px 3px 0 0; min-height:2px;}
+  .dchart .db.zero{background:var(--line-soft); height:2px !important;}
   .dchart .db.max{background:var(--pink);}
 
   /* ---------- 我的页 ---------- */
-  .me-hero{border-radius:var(--r-lg); box-shadow:var(--sh); background:var(--paper2);
+  .me-hero{border:1.5px dashed var(--line); border-radius:var(--r-lg); box-shadow:var(--sh); background:var(--paper2);
     padding:14px 16px; margin-bottom:12px; display:flex; align-items:center; gap:13px;}
-  .me-ic{width:56px; height:56px; border-radius:var(--r-sm); background:var(--av-bg);
+  .me-ic{width:56px; height:56px; border-radius:var(--r-sm); background:var(--pink-l);
+    border:1.5px dashed rgba(245,139,168,.5);
     display:flex; align-items:center; justify-content:center; flex:none; overflow:hidden;}
   .me-ic img{max-width:80%; max-height:80%; object-fit:contain;}
-  .me-hero .t{font-size:17px; font-weight:800;}
-  .me-hero .s{font-size:11.5px; font-weight:600; color:var(--muted);}
+  .me-hero .t{font-size:17px;}
+  .me-hero .s{font-size:11.5px; color:var(--muted);}
   .feat-grid{display:grid; grid-template-columns:1fr 1fr; gap:11px; margin-bottom:12px;}
-  .feat{border-radius:var(--r-md); box-shadow:var(--sh-sm); background:var(--paper2); padding:12px; cursor:pointer;}
+  .feat{position:relative; border:1.5px dashed var(--line); border-radius:var(--r-md); box-shadow:var(--sh-sm);
+    background:var(--paper2); padding:12px; cursor:pointer; overflow:hidden;}
+  .feat:active{transform:scale(.97);}
+  .feat .ic{width:40px; height:40px; border-radius:12px; background:var(--av-bg);
+    border:1.4px dashed var(--line-soft);
+    display:flex; align-items:center; justify-content:center; font-size:20px; margin-bottom:8px; overflow:hidden;}
+  .feat .ic img{max-width:78%; max-height:78%; object-fit:contain;}
+  .feat .n{font-size:14.5px;}
+  .feat .d{font-size:11.5px; color:var(--muted); margin-top:1px;}
+  /* 页脚说明：写在蓝底（不是白卡）上，所以要用深一档的蓝，否则几乎看不见 */
+  .foot-note{font-size:11.5px; color:#6E93A4; padding:2px 4px 6px;}
 
-  /* 图标再放大（用户反馈「我的」页图标太小）：底板与熊图都加大 */
-  .feat .ic{width:54px; height:54px; border-radius:16px; display:flex; align-items:center;
-    justify-content:center; font-size:20px; margin-bottom:9px; overflow:hidden;}
-  .feat .ic img{max-width:88%; max-height:88%; object-fit:contain;}
-  .feat .n{font-size:14.5px; font-weight:800;}
-  .feat .d{font-size:11.5px; font-weight:600; color:var(--muted); margin-top:1px;}
-  .foot-note{font-size:11.5px; font-weight:600; color:var(--muted); padding:2px 4px 6px;}
-
-  /* ---------- 底栏：浮动胶囊 ---------- */
-  /* 整条是一个独立胶囊，四周露出页面背景（薄荷 + 圆点），不再贴着屏幕边。
-     ⚠️ 屏幕最底约 62pt 是 iOS 系统预留区（网页画不到），系统取 body 的
-     background-color 填色；因此 body 底色必须是页面纸色（薄荷），那条就与页面同色。
-     详见 body 规则处的注释。 */
+  /* ---------- 底栏 ---------- */
+  /* fixed + bottom:0 贴屏幕最底 */
   nav.tabbar{
-    position:fixed; left:14px; right:14px; bottom:10px; z-index:40;
-    background:var(--paper2);
-    border-radius:26px;                    /* 四角都圆 → 完整胶囊 */
-    box-shadow:0 6px 20px rgba(70,120,132,.20);
-    padding:9px 10px;
-    display:flex; gap:4px;
+    position:fixed; left:0; right:0; bottom:0; z-index:40;
+    background:var(--paper2); border-top:1.5px dashed var(--line); border-radius:22px 22px 0 0;
+    box-shadow:0 -3px 14px rgba(150,196,212,.20);
+    padding:8px 10px;
+    display:flex; gap:6px;
   }
-  /* Safari 标签页模式：底部有工具栏 + Home Indicator，胶囊整体上抬 */
+  /* Safari 标签页模式：底部有工具栏 + Home Indicator，需要留出安全区 */
   html[data-standalone="0"] nav.tabbar{
-    bottom:calc(10px + env(safe-area-inset-bottom, 0px));
+    padding-bottom:calc(8px + env(safe-area-inset-bottom, 0px));
   }
-  /* 独立 App 模式（添加到主屏幕）：可视区已含 Home Indicator 区，不需要再抬 */
+  /* 独立 App 模式（添加到主屏幕）：可视区已经包含 Home Indicator 区，
+     再加 safe-area 内边距会把任务栏顶上去，看起来像"悬空一格" */
   html[data-standalone="1"] nav.tabbar{
-    bottom:10px;
+    padding-bottom:8px;
   }
   /* JS 尚未跑起来时的兜底（按 Safari 模式处理） */
   html:not([data-standalone]) nav.tabbar{
-    bottom:calc(10px + env(safe-area-inset-bottom, 0px));
+    padding-bottom:calc(8px + env(safe-area-inset-bottom, 0px));
   }
   nav.tabbar .tab{
-    position:relative; z-index:1;
-    flex:1; background:none; border-radius:999px; padding:8px 0 7px;
-    display:flex; flex-direction:column; align-items:center; gap:4px;
-    font-size:11.5px; font-weight:800; color:var(--nav-idle);
-    transition:color .22s ease;
-    /* ⚠️ 不要在这里写 will-change:transform —— 4 个 tab 各提升一个图层，
-       叠加胶囊自己共 5 个合成层，iOS 上会拖慢并留下残影。
-       图层提升只在按压期间由 .spring 内部临时加（见 attachSpring）。 */
+    flex:1; background:none; border-radius:999px; padding:7px 0 6px;
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    font-size:11px; color:var(--nav-idle);
   }
-  /* 图标放大（用户要求） */
-  nav.tabbar .tab .ti{height:27px; line-height:1; display:flex; align-items:center; justify-content:center;}
-  nav.tabbar .tab .ti img{height:27px; width:auto; object-fit:contain;}
-  nav.tabbar .tab .ti.emo{font-size:27px;}
-  /* 选中态：颜色由 .nav-pill 那块滑动背景负责，这里只把文字/图标提亮 */
-  nav.tabbar .tab.on{background:none; color:var(--pink);}
+  nav.tabbar .tab .ti{height:20px; line-height:1; display:flex; align-items:center; justify-content:center;}
+  nav.tabbar .tab .ti img{height:20px; width:auto; object-fit:contain; opacity:.45; filter:grayscale(.6);}
+  nav.tabbar .tab .ti.emo{font-size:20px;}
+  /* 选中态：淡粉胶囊 + 深粉字，图标恢复彩色 */
+  nav.tabbar .tab.on{background:var(--pink-l); color:var(--pink-d);}
+  nav.tabbar .tab.on .ti img{opacity:1; filter:none;}
 
-  /* 滑动胶囊。
-     ⚠️ 残影/卡顿的根因（v1.1.2 修）：原来对 transform + width + height 三个属性
-     做过渡，其中 width/height 属于布局属性，每帧触发重排（layout），
-     在 iOS 上表现为掉帧 + 上一次的位置留下残影。
-     正解：**尺寸不进过渡，只用 transform 做位移**——
-       ① 胶囊尺寸在点击瞬间直接写死（不参与动画）；
-       ② 位移用 translate3d（走合成层，不重排）；
-       ③ 宽度变化改为 `scaleX` 会拉伸圆角，所以这里改用「固定最大宽度 + translate」，
-          胶囊尺寸按最宽的 tab 一次性定好，视觉上仍是圆角胶囊。 */
-  nav.tabbar .nav-pill{
-    position:absolute; left:0; top:0;
-    background:var(--paper); border-radius:999px;
-    pointer-events:none; z-index:0;
-    transform:translate3d(0,0,0);
-    transition:transform .32s cubic-bezier(.22,.9,.24,1);
-    will-change:transform;
-  }
-  /* 减弱动效偏好：直接跳，不做滑动 */
-  @media(prefers-reduced-motion:reduce){
-    nav.tabbar .nav-pill{transition:none}
-  }
-
-  /* ---------- 弹层 ---------- */
-  #mask{position:fixed; inset:0; background:rgba(76,101,112,.42); z-index:60; display:none; align-items:flex-end; justify-content:center;}
+  /* ---------- 弹层 ----------
+     ⚠️ z-index 必须高过记录卡的堆叠层：#chatFeed 的卡片在 JS 里被赋
+     z-index 1000+（1000 - i*10 - p*5，见 updateStack），旧的 60 会被卡片穿透，
+     弹层里能看到记录卡浮上来。这里提到 2000 / 2100，永远压在卡片之上。 */
+  #mask{position:fixed; inset:0; background:rgba(90,140,160,.30); z-index:2000;
+    display:none; align-items:flex-end; justify-content:center;}
   #mask.show{display:flex;}
   #sheet{
+    position:relative;
     width:100%; max-width:560px; max-height:90vh; overflow-y:auto;
-    background:var(--paper); border-radius:26px 26px 0 0;
-    box-shadow:0 -6px 24px rgba(70,120,132,.2);
+    background:var(--paper2); border:1.5px dashed var(--line); border-radius:26px 26px 0 0;
+    box-shadow:0 -6px 24px rgba(150,196,212,.28);
     animation:up .22s ease;
+  }
+  /* 弹层左上角的胶带（和样板第 6 屏一致） */
+  #sheet::before{
+    content:''; position:absolute; left:10px; top:-9px; width:58px; height:21px;
+    border-radius:2px;
+    background:linear-gradient(135deg,#FDDCE6 0%,#FAC9D8 52%,#F7BCCE 100%);
+    border:1px solid rgba(240,163,186,.75);
+    transform:rotate(-38deg);
+    box-shadow:0 2px 4px rgba(120,175,195,.30);
+    pointer-events:none; z-index:3;
   }
   @keyframes up{from{transform:translateY(30px);} to{transform:none;}}
   .sheet-head{
     position:sticky; top:0; z-index:2;
     background:var(--paper2); border-radius:26px 26px 0 0;
     padding:14px 16px 12px; display:flex; align-items:center; justify-content:space-between; gap:10px;
-    box-shadow:0 2px 10px rgba(70,120,132,.08);
+    box-shadow:0 2px 10px rgba(150,196,212,.16);
   }
-  .sheet-head h2{margin:0; font-size:18px; font-weight:800; color:var(--pink); letter-spacing:1px;}
+  .sheet-head h2{margin:0; font-size:18px; color:var(--ink); letter-spacing:1px;}
   .sheet-head .x{
-    width:32px; height:32px; background:var(--av-bg); border-radius:50%; font-size:17px; font-weight:800;
+    width:32px; height:32px; background:var(--paper2); border:1.5px dashed var(--line); border-radius:50%; font-size:17px;
     display:flex; align-items:center; justify-content:center; padding:0; flex:none;
+  }
+  /* 弹层右上角的星星贴纸 */
+  .sheet-head::after{
+    content:''; position:absolute; right:-6px; top:-14px; width:34px; height:34px;
+    background:url('./bears/mark-sparkle.png') no-repeat center/contain;
+    transform:rotate(10deg); pointer-events:none;
+    filter:drop-shadow(0 2px 3px rgba(150,196,212,.35));
   }
   .sheet-body{padding:14px 14px calc(20px + env(safe-area-inset-bottom));}
 
   /* ---------- 二次确认层（替代 confirm） ---------- */
-  #cfm{position:fixed; inset:0; background:rgba(76,101,112,.5); z-index:80;
+  /* 同样要高过卡片堆叠层（1000+），也要高过弹层（2000） */
+  #cfm{position:fixed; inset:0; background:rgba(90,140,160,.34); z-index:2200;
     display:none; align-items:center; justify-content:center; padding:22px;}
   #cfm.show{display:flex;}
   #cfmBox{
-    width:100%; max-width:330px; background:var(--paper2); border-radius:var(--r-lg);
-    box-shadow:0 10px 30px rgba(70,120,132,.24); padding:22px 20px;
+    width:100%; max-width:330px; background:var(--paper2); border:1.5px dashed var(--line);
+    border-radius:var(--r-lg);
+    box-shadow:0 10px 30px rgba(150,196,212,.32); padding:22px 20px;
     animation:cfmIn .16s ease;
   }
   @keyframes cfmIn{from{transform:scale(.94); opacity:.6;} to{transform:none; opacity:1;}}
-  #cfmMsg{font-size:15px; font-weight:800; line-height:1.6; text-align:center;}
+  #cfmMsg{font-size:15px; line-height:1.6; text-align:center;}
 
   .fld{margin-bottom:15px;}
-  .fld > .lb{font-size:13px; font-weight:800; margin-bottom:7px; display:block; color:var(--muted);}
+  .fld > .lb{font-size:13px; margin-bottom:7px; display:block; color:var(--muted);}
   .fld input[type=text],.fld input[type=number],.fld input[type=password],.fld input[type=datetime-local],.fld select{
-    width:100%; border:none; border-radius:var(--r-sm); background:var(--paper2); box-shadow:var(--sh-sm);
-    padding:13px 15px; font-size:15px; font-weight:600;
+    width:100%; border:1.5px dashed var(--line); border-radius:var(--r-sm); background:var(--paper2); box-shadow:var(--sh-sm);
+    padding:13px 15px; font-size:15px;
   }
   .fld input::placeholder{color:var(--nav-idle);}
-  .hint{font-size:11.5px; font-weight:600; color:var(--muted); margin-top:7px; line-height:1.55;}
+  .hint{font-size:11.5px; color:var(--muted); margin-top:7px; line-height:1.55;}
 
   .btn{
-    border-radius:999px; box-shadow:var(--sh-sm); background:var(--paper2);
-    padding:12px 16px; font-size:14px; font-weight:800;
+    border:1.5px dashed var(--line); border-radius:999px; box-shadow:var(--sh-sm); background:var(--paper2);
+    padding:12px 16px; font-size:14px;
   }
-
-  .btn-y{background:var(--pink-l); color:var(--pink);}
-  .btn-c{background:var(--av-bg);}
-  .btn-g{background:#DFF4EE; color:var(--mint);}
-  .btn-r{background:var(--pink); color:#fff;}
+  .btn:active{transform:scale(.97);}
+  .btn-y{background:var(--pink-l); color:var(--pink-d); border-color:#FBC4D4; border-style:solid;}
+  .btn-c{background:var(--av-bg); border-color:var(--line-soft);}
+  .btn-g{background:var(--av-bg); color:var(--mint); border-color:var(--line);}
+  .btn-r{background:var(--pink); color:#fff; border-color:var(--pink); border-style:solid;
+    box-shadow:0 2px 0 rgba(217,85,122,.35);}
   .btn-full{width:100%; display:block; padding:15px; font-size:16px;}
   .btn-row{display:flex; gap:10px;}
   .btn-row .btn{flex:1;}
 
   .type-toggle{display:flex; gap:10px; margin-bottom:15px;}
   .type-toggle button{
-    flex:1; border-radius:999px; box-shadow:var(--sh-sm); background:var(--av-bg);
-    padding:13px; font-size:15px; font-weight:800; color:var(--muted);
+    flex:1; border:1.5px solid var(--line); border-radius:999px; box-shadow:var(--sh-sm); background:var(--av-bg);
+    padding:13px; font-size:15px; color:var(--muted);
   }
-  .type-toggle button.on-ex{background:var(--pink-l); color:var(--pink);}
-  .type-toggle button.on-in{background:#DFF4EE; color:var(--mint);}
+  /* 粉色深浅搭配：浅粉底 → 深粉字；收入淡蓝 → 蓝字 */
+  .type-toggle button.on-ex{background:var(--pink-l); color:var(--pink-d); border-color:#FBC4D4;}
+  .type-toggle button.on-in{background:var(--av-bg); color:#5FA0B8;}
 
   .chips{display:grid; grid-template-columns:repeat(auto-fill,minmax(78px,1fr)); gap:10px; margin-bottom:15px;}
   .cchip{
-    border-radius:var(--r-sm); box-shadow:var(--sh-sm); background:var(--paper2);
-    padding:9px 3px; font-size:11.5px; font-weight:800; text-align:center; color:var(--ink);
+    border:1.5px dashed var(--line); border-radius:var(--r-sm); box-shadow:var(--sh-sm); background:var(--paper2);
+    padding:9px 3px; font-size:11.5px; text-align:center; color:var(--ink);
   }
   .cchip .ce{display:block; font-size:22px; margin-bottom:3px; line-height:1.2;}
   .cchip .ce img{width:30px; height:30px; object-fit:contain; vertical-align:middle;}
-  .cchip.on{background:var(--pink-l); color:var(--pink);}
+  .cchip.on{background:var(--pink-l); color:var(--pink-d); border-color:#FBC4D4;}
   .achips{display:flex; flex-wrap:wrap; gap:9px; margin-bottom:15px;}
-  .achip{border-radius:999px; box-shadow:var(--sh-sm); background:var(--paper2); padding:8px 15px;
-    font-size:13px; font-weight:800; color:var(--ink);}
-  .achip.on{background:var(--pink-l); color:var(--pink);}
+  .achip{border:1.5px dashed var(--line); border-radius:999px; box-shadow:var(--sh-sm); background:var(--paper2); padding:8px 15px;
+    font-size:13px; color:var(--ink);}
+  .achip.on{background:var(--pink-l); color:var(--pink-d); border-color:#FBC4D4;}
 
   .kw-wrap{display:flex; flex-wrap:wrap; gap:8px; margin-top:9px;}
-  .kw{border-radius:999px; background:var(--av-bg); padding:5px 12px; font-size:12px; font-weight:700;}
+  .kw{border:1px dashed var(--line-soft); border-radius:999px; background:var(--av-bg); padding:5px 12px; font-size:12px;}
   .emo-pick{display:flex; flex-wrap:wrap; gap:9px;}
-  .emo-pick button{width:50px; height:50px; border-radius:var(--r-sm); background:var(--paper2);
+  .emo-pick button{width:50px; height:50px; border:1.5px dashed var(--line); border-radius:var(--r-sm); background:var(--paper2);
     box-shadow:var(--sh-sm); font-size:23px; padding:0;}
-  .emo-pick button.on{background:var(--pink-l); box-shadow:var(--sh-sm); outline:2px solid var(--pink); outline-offset:1px;}
+  .emo-pick button.on{background:var(--pink-l); outline:2px solid var(--pink); outline-offset:1px;}
   .col-pick{display:flex; flex-wrap:wrap; gap:9px;}
   .col-pick button{width:46px; height:40px; border-radius:12px; box-shadow:var(--sh-sm); padding:0;}
   .col-pick button.on{outline:2px solid var(--ink); outline-offset:2px;}
 
-  .cat-item{border-radius:var(--r-md); box-shadow:var(--sh-sm); background:var(--paper2);
+  .cat-item{border:1.5px dashed var(--line); border-radius:var(--r-md); box-shadow:var(--sh-sm); background:var(--paper2);
     padding:12px 14px; margin-bottom:11px; display:flex; align-items:center; gap:12px; cursor:pointer;}
   .cat-item .ic{width:46px; height:46px; border-radius:13px; background:var(--av-bg); flex:none;
+    border:1.4px dashed var(--line-soft);
     display:flex; align-items:center; justify-content:center; font-size:23px; overflow:hidden;}
   .cat-item .ic img{max-width:78%; max-height:78%; object-fit:contain;}
   .cat-item .mid{flex:1; min-width:0;}
-  .cat-item .n{font-size:15.5px; font-weight:800;}
-  .cat-item .k{font-size:11px; font-weight:600; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .cat-item .c{background:var(--av-bg); border-radius:999px; padding:4px 10px; font-size:11.5px; font-weight:800; flex:none;}
-  .cat-item .ar{font-size:18px; font-weight:800; flex:none; color:var(--nav-idle);}
+  .cat-item .n{font-size:15.5px;}
+  .cat-item .k{font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .cat-item .c{background:var(--av-bg); border:1px dashed var(--line-soft); border-radius:999px;
+    padding:4px 10px; font-size:11.5px; flex:none;}
+  .cat-item .ar{font-size:18px; flex:none; color:var(--nav-idle);}
 
-  .badge{display:inline-block; background:var(--av-bg); border-radius:999px; padding:3px 10px; font-size:11px; font-weight:800; color:var(--ink);}
-  .badge.g{background:#DFF4EE; color:var(--mint);}
-  .badge.y{background:var(--pink-l); color:var(--pink);}
-  .badge.p{background:var(--pink-l); color:var(--pink);}
+  .badge{display:inline-block; background:var(--av-bg); border:1px dashed var(--line-soft); border-radius:999px;
+    padding:3px 10px; font-size:11px; color:var(--ink);}
+  .badge.g{background:var(--av-bg); color:var(--mint);}
+  .badge.y{background:var(--pink-l); color:var(--pink-d); border-color:rgba(245,139,168,.5);}
+  .badge.p{background:var(--pink-l); color:var(--pink-d); border-color:rgba(245,139,168,.5);}
 
+  /* toast 也要高过卡片堆叠层（1000+）和弹层，否则提示会被压在下面看不见 */
   #toast{
-    /* 底栏是浮动胶囊（离屏底 10px）→ toast 要抬到它上面 */
-    position:fixed; left:50%; bottom:calc(var(--tab-h, 92px) + 30px);
-    transform:translateX(-50%) translateY(10px); z-index:90; opacity:0; pointer-events:none;
-    background:rgba(76,101,112,.94); color:#fff; font-size:13px; font-weight:700; padding:11px 20px;
+    position:fixed; left:50%; bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 26px);
+    transform:translateX(-50%) translateY(10px); z-index:2300; opacity:0; pointer-events:none;
+    background:rgba(90,140,160,.94); color:#fff; font-size:13px; padding:11px 20px;
     border-radius:999px; box-shadow:var(--sh-sm); max-width:86vw; text-align:center;
     transition:opacity .18s, transform .18s;
   }
   #toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
 
-  /* ---------- 熊主题装饰（重度） ---------- */
-  .achip img{width:18px; height:18px; object-fit:contain; vertical-align:-4px; margin-right:3px;}
+  /* ---------- 手账装饰 ---------- */
+  /* 顶部标题行右侧探头的熊 */
+  header::after{
+    content:''; position:absolute; right:12px; top:calc(4px + env(safe-area-inset-top));
+    width:48px; height:44px;
+    background:url('./bears/hero-welcome.png') no-repeat center/contain;
+    pointer-events:none; opacity:.95;
+  }
+  header{position:relative;}
+  .chat-hero ~ *{position:relative;}
+  /* 白色爪印（用白色不透明，压在蓝底上才看得见） */
+  .paw{position:absolute; z-index:-1; width:22px; height:20px; pointer-events:none; opacity:.85;
+       background:
+         radial-gradient(circle 4px at 11px 4px, rgba(255,255,255,.95) 98%, transparent 100%),
+         radial-gradient(circle 3.2px at 4px 8px,  rgba(255,255,255,.95) 98%, transparent 100%),
+         radial-gradient(circle 3.2px at 18px 8px, rgba(255,255,255,.95) 98%, transparent 100%),
+         radial-gradient(ellipse 7px 6px at 11px 15px, rgba(255,255,255,.95) 98%, transparent 100%);
+  }
+  .paw.p1{left:10px; top:96px; transform:rotate(-18deg);}
+  .paw.p2{right:8px; bottom:120px; transform:rotate(16deg);}
+  /* 星星贴纸：改成淡粉实心（原来用 --pink-l，在蓝底上偏灰） */
+  .star{position:absolute; z-index:-1; width:16px; height:16px; background:var(--pink-l); pointer-events:none;
+        clip-path:polygon(50% 0%,61% 35%,97% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,3% 35%,39% 35%);}
+  .star.s1{left:14px; bottom:150px;}
 
-  /* ---------- 弹簧按压回弹（Spring Press）----------
-     规格见 references/button-feedback.md 第 1 条：
-       · 按下 1 → 0.93，过阻尼（k=470/d=27，几乎不过冲）—— 必须快速到位
-       · 松手回到 1 并过冲约 +2.5%，欠阻尼（k=380/d=12）—— 这才是回弹
-       · 按住时叠一层 12% 暗色
-       · 形变只作用在按钮自身（scale 等比，不会压变文字）
-     由 JS 用同一弹簧值驱动 transform 与遮罩，两个属性不脱节。
-     ⚠️ will-change 只在按压期间临时加（.pressing），松手就撤 ——
-        常驻会让几十个按钮各自提升一个合成层，iOS 上明显掉帧、还会留残影。 */
+  /* ==========================================================================
+     以下规则是换肤时漏掉、又从旧主题补回来的（日期选择面板 / 卡片堆叠 /
+     弹簧按压 / 波点层 / 底部滑块）。换肤脚本只替换 <style> 整块，
+     不补这些就等于把新组件的样式删了 —— 用 diff-selectors.ps1 可以查出
+     哪条规则被漏掉（它比对新旧 <style> 的选择器集合）。
+     ========================================================================== */
+
+  /* ---------- 波点层：固定铺满视口 ---------- */
+  body::before{
+    content:''; position:fixed; left:0; right:0; top:0; bottom:0;
+    z-index:-1; pointer-events:none;
+    background-image:radial-gradient(#FFFFFF 2.2px, transparent 2.5px);
+    background-size:14px 14px;
+    background-repeat:repeat;
+  }
+  /* 独立 App 模式下底部约 47pt 是 iOS 的窗口背景区，网页画不进去，
+     波点硬切会留下一条「有波点 → 没波点」的横线，所以让它在底部柔和收掉。 */
+  html[data-standalone="1"] body::before{
+    -webkit-mask-image:linear-gradient(to bottom, #000 calc(100% - 58px), transparent 100%);
+    mask-image:linear-gradient(to bottom, #000 calc(100% - 58px), transparent 100%);
+  }
+
+  /* ---------- 日期按钮（点开是月份选择面板） ---------- */
+  .date-chip{
+    position:relative;
+    background:var(--paper2); border:1.5px dashed var(--line); border-radius:999px; box-shadow:var(--sh-sm);
+    padding:9px 20px 9px 15px; display:flex; align-items:center; gap:8px;
+    font-size:15px; color:var(--ink); letter-spacing:.5px;
+  }
+  .date-chip .date-caret{
+    width:0; height:0; flex:none;
+    border-left:5px solid transparent; border-right:5px solid transparent;
+    border-top:6px solid var(--muted); margin-left:1px;
+  }
+  .date-chip .date-sticker{
+    width:26px; height:26px; flex:none; margin-left:-4px;
+    display:flex; align-items:center; justify-content:center;
+    transform:rotate(-10deg);
+  }
+  .date-chip .date-sticker img{width:100%; height:100%; object-fit:contain;}
+  .date-chip .date-text{white-space:nowrap;}
+
+  /* ---------- 月份选择面板（从日期按钮形变展开） ---------- */
+  .dp-mask{
+    position:fixed; inset:0; z-index:70;
+    background:rgba(90,140,160,.30);
+    opacity:0; pointer-events:none; transition:opacity .28s ease;
+  }
+  .dp-mask.show{opacity:1; pointer-events:auto;}
+  .dp-panel{
+    position:fixed; z-index:71; overflow:hidden;
+    background:var(--paper2); border:1.5px dashed var(--line); box-shadow:var(--sh);
+    display:none;   /* 展开时由 JS 打开 */
+  }
+  .dp-panel.show{display:block;}
+  .dp-inner{padding:16px; opacity:0;}
+  .dp-year{display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:14px;}
+  .dp-year .dp-y{font-size:17px; letter-spacing:1px; min-width:84px; text-align:center;}
+  .dp-year .dp-yb{
+    width:34px; height:34px; border-radius:50%; background:var(--av-bg);
+    border:1.5px dashed var(--line-soft); box-shadow:var(--sh-sm); font-size:17px;
+    display:flex; align-items:center; justify-content:center; padding:0;
+  }
+  .dp-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:9px;}
+  .dp-cell{
+    padding:11px 4px; border-radius:var(--r-sm); background:var(--av-bg);
+    border:1.3px dashed var(--line-soft);
+    font-size:14px; text-align:center; color:var(--ink);
+  }
+  .dp-cell.future{opacity:.35;}
+  .dp-cell.on{background:var(--pink-l); color:var(--pink-d); border-color:#FBC4D4;}
+  .dp-today{margin-top:14px;}
+
+  /* ---------- 记录卡堆叠滚动 ---------- */
+  .stack-card{
+    position:sticky;
+    margin-bottom:12px;
+    transform-origin:50% 0%;
+    will-change:transform, opacity;
+    backface-visibility:hidden;
+  }
+  /* 尾部留白：否则最后一张卡滚不到吸顶位 */
+  .stack-tail{height:44vh; pointer-events:none;}
+  #chatFeed{position:relative;}
+
+  /* ---------- 弹簧按压反馈 ---------- */
   .spring{position:relative;}
-  .spring.pressing{will-change:transform;}
   .spring::after{
     content:''; position:absolute; inset:0; border-radius:inherit;
     background:#000; opacity:0; pointer-events:none;
   }
+  .spring.pressing{will-change:transform;}
+
+  /* ---------- 底栏滑块（跟随选中 tab 滑动） ---------- */
+  nav.tabbar .nav-pill{
+    position:absolute; left:0; top:0;
+    background:var(--pink-l); border-radius:999px;
+    pointer-events:none; z-index:0;
+    transform:translate3d(0,0,0);
+    transition:transform .32s cubic-bezier(.22,.9,.24,1);
+    will-change:transform;
+  }
+  @media(prefers-reduced-motion:reduce){
+    nav.tabbar .nav-pill{transition:none}
+  }
+
+  .achip img{width:18px; height:18px; object-fit:contain; vertical-align:-4px; margin-right:3px;}
+
 </style>
 <script>
 /* 首屏就判定是否「独立 App 模式」——必须在渲染前设置，
@@ -646,7 +726,7 @@
 
 <header>
   <button class="date-chip" id="dateBtn">
-    <span class="date-sticker"><img src="bears/i-riyong.png" alt=""></span>
+    <span class="date-sticker"><img src="bears/cat-riyong.png" alt=""></span>
     <span class="date-text" id="dateLabel">—</span>
     <span class="date-caret" aria-hidden="true"></span>
   </button>
@@ -781,7 +861,7 @@
   <!-- ============ 我的 ============ -->
   <section id="page-me" class="page">
     <div class="me-hero">
-      <div class="me-ic"><img src="bears/b2_info.png" alt=""></div>
+      <div class="me-ic"><img src="bears/tab-me.png" alt=""></div>
       <div>
         <div class="t">我的熊记</div>
         <div class="s" id="meCount">已记录 0 笔</div>
@@ -790,27 +870,27 @@
 
     <div class="feat-grid">
       <div class="feat" data-act="cats">
-        <div class="ic"><img src="bears/i-other.png" alt=""></div>
+        <div class="ic"><img src="bears/cat-other.png" alt=""></div>
         <div class="n">分类管理</div>
         <div class="d" id="featCatCount">—</div>
       </div>
       <div class="feat" data-act="export">
-        <div class="ic"><img src="bears/i-gouwu.png" alt=""></div>
+        <div class="ic"><img src="bears/cat-gouwu.png" alt=""></div>
         <div class="n">导出数据</div>
         <div class="d" id="featExp">0 笔</div>
       </div>
       <div class="feat" data-act="sync">
-        <div class="ic"><img src="bears/b1_faq.png" alt=""></div>
+        <div class="ic"><img src="bears/tab-ledger.png" alt=""></div>
         <div class="n">GitHub 同步</div>
         <div class="d" id="featSync">未配置</div>
       </div>
       <div class="feat" data-act="about">
-        <div class="ic"><img src="bears/b4_panda.png" alt=""></div>
+        <div class="ic"><img src="bears/tab-record.png" alt=""></div>
         <div class="n">关于</div>
         <div class="d" id="featVer">v1.1.5</div>
       </div>
       <div class="feat" data-act="update">
-        <div class="ic"><img src="bears/b3_wave.png" alt=""></div>
+        <div class="ic"><img src="bears/tab-stats.png" alt=""></div>
         <div class="n">检查更新</div>
         <div class="d" id="featUpd">点一下刷新版本</div>
       </div>
@@ -822,10 +902,10 @@
 
 <nav class="tabbar">
   <span class="nav-pill"></span>
-  <button class="tab on" data-page="chat"><span class="ti"><img src="bears/b4_panda.png" alt=""></span>记录</button>
-  <button class="tab" data-page="list"><span class="ti"><img src="bears/b1_faq.png" alt=""></span>账本</button>
-  <button class="tab" data-page="stats"><span class="ti"><img src="bears/b3_wave.png" alt=""></span>统计</button>
-  <button class="tab" data-page="me"><span class="ti"><img src="bears/b2_info.png" alt=""></span>我的</button>
+  <button class="tab on" data-page="chat"><span class="ti"><img src="bears/tab-record.png" alt=""></span>记录</button>
+  <button class="tab" data-page="list"><span class="ti"><img src="bears/tab-ledger.png" alt=""></span>账本</button>
+  <button class="tab" data-page="stats"><span class="ti"><img src="bears/tab-stats.png" alt=""></span>统计</button>
+  <button class="tab" data-page="me"><span class="ti"><img src="bears/tab-me.png" alt=""></span>我的</button>
 </nav>
 
 <!-- ============ 弹层 ============ -->
@@ -882,25 +962,25 @@ var KEY = 'xiongji-v1';
    color 用熊主题的柔和色板，与薄荷蓝底、粉色主色一致 */
 var DEFAULT_CATS = [
   { id:'canyin',  name:'餐饮', emoji:'🍜', color:'#F58BA8', type:'expense', kw:['饭','餐','吃','喝','午饭','早饭','晚饭','夜宵','外卖','美团','饿了么','食堂','咖啡','奶茶','星巴克','肯德基','麦当劳','汉堡','火锅','烧烤','小吃','米线','麻辣烫','拉面','面馆','牛肉面','盖饭','沙县','黄焖鸡','甜品','蛋糕','豆浆','粥','点心','快餐','简餐','酒馆','水果','买菜'] },
-  { id:'gouwu',   name:'购物', emoji:'🛒', color:'#F7C873', type:'expense', kw:['买','购物','超市','淘宝','天猫','京东','拼多多','唯品会','商场','服饰','衣服','鞋','优衣库','数码','家电','商城','旗舰店','便利店'] },
-  { id:'yule',    name:'娱乐', emoji:'🎮', color:'#7FD6E8', type:'expense', kw:['娱乐','电影','游戏','唱歌','ktv','演唱会','会员','视频','音乐','网易','腾讯视频','爱奇艺','优酷','bilibili','哔哩','steam','健身','游泳','按摩','足浴','酒吧','剧本杀','密室'] },
+  { id:'gouwu',   name:'购物', emoji:'🛒', color:'#F2A2C0', type:'expense', kw:['买','购物','超市','淘宝','天猫','京东','拼多多','唯品会','商场','服饰','衣服','鞋','优衣库','数码','家电','商城','旗舰店','便利店'] },
+  { id:'yule',    name:'娱乐', emoji:'🎮', color:'#9FD8E8', type:'expense', kw:['娱乐','电影','游戏','唱歌','ktv','演唱会','会员','视频','音乐','网易','腾讯视频','爱奇艺','优酷','bilibili','哔哩','steam','健身','游泳','按摩','足浴','酒吧','剧本杀','密室'] },
   { id:'yiliao',  name:'医疗', emoji:'💊', color:'#F2A2C0', type:'expense', kw:['医院','看病','药','买药','挂号','诊所','体检','医疗','口腔','牙科','门诊'] },
-  { id:'xuexi',   name:'学习', emoji:'📚', color:'#7FD9C4', type:'expense', kw:['书','学习','培训','课程','学费','书店','考试','网课','文具','教材'] },
-  { id:'jiaotong',name:'交通', emoji:'🚕', color:'#F4A97B', type:'expense', kw:['打车','出租车','滴滴','地铁','公交','高铁','火车','机票','航空','加油','停车','单车','哈啰','青桔','出行','车费','洗车','违章','摩拜','油费','过路费','高速','停车费','车票','船票','共享单车','电动车','充电桩','网约车'] },
-  { id:'tongxun', name:'通讯', emoji:'📱', color:'#B4A8E8', type:'expense', kw:['话费','流量','移动','联通','电信','宽带','网费','通讯','月租'] },
+  { id:'xuexi',   name:'学习', emoji:'📚', color:'#B8D4E8', type:'expense', kw:['书','学习','培训','课程','学费','书店','考试','网课','文具','教材'] },
+  { id:'jiaotong',name:'交通', emoji:'🚕', color:'#FBC4D4', type:'expense', kw:['打车','出租车','滴滴','地铁','公交','高铁','火车','机票','航空','加油','停车','单车','哈啰','青桔','出行','车费','洗车','违章','摩拜','油费','过路费','高速','停车费','车票','船票','共享单车','电动车','充电桩','网约车'] },
+  { id:'tongxun', name:'通讯', emoji:'📱', color:'#A8CBE0', type:'expense', kw:['话费','流量','移动','联通','电信','宽带','网费','通讯','月租'] },
   { id:'juzhu',   name:'居住', emoji:'🏠', color:'#F5B7BE', type:'expense', kw:['房租','租金','水费','电费','燃气','物业','取暖','中介费','押金','家政','保洁'] },
   { id:'renqing', name:'人情', emoji:'🎁', color:'#F79FB8', type:'expense', kw:['红包','礼金','礼物','随礼','转账','压岁','份子','小荷包','亲密付','代付'] },
   { id:'other',   name:'其他', emoji:'📦', color:'#B9C6CC', type:'expense', kw:[] },
   /* 收入 */
-  { id:'gz',      name:'工资', emoji:'💰', color:'#7FD9C4', type:'income', kw:['工资','薪资','薪水','月薪','奖金','年终','绩效','补贴'] },
-  { id:'jz',      name:'兼职', emoji:'💼', color:'#7FD6E8', type:'income', kw:['兼职','外快','私活','劳务'] },
-  { id:'lc',      name:'理财', emoji:'📈', color:'#F7C873', type:'income', kw:['理财','基金','股票','利息','收益','余额宝','零钱通','定期'] },
+  { id:'gz',      name:'工资', emoji:'💰', color:'#B8D4E8', type:'income', kw:['工资','薪资','薪水','月薪','奖金','年终','绩效','补贴'] },
+  { id:'jz',      name:'兼职', emoji:'💼', color:'#9FD8E8', type:'income', kw:['兼职','外快','私活','劳务'] },
+  { id:'lc',      name:'理财', emoji:'📈', color:'#F2A2C0', type:'income', kw:['理财','基金','股票','利息','收益','余额宝','零钱通','定期'] },
   { id:'hb',      name:'红包', emoji:'🧧', color:'#F58BA8', type:'income', kw:['红包','压岁钱','礼金','转账','收款','转入','收到','小荷包'] },
-  { id:'bx',      name:'报销', emoji:'🧾', color:'#F4A97B', type:'income', kw:['报销','退款','退货','返现','赔付'] },
+  { id:'bx',      name:'报销', emoji:'🧾', color:'#FBC4D4', type:'income', kw:['报销','退款','退货','返现','赔付'] },
   { id:'otherin', name:'其他收入', emoji:'✨', color:'#B9C6CC', type:'income', kw:[] }
 ];
 var ACCOUNTS = ['微信支付','支付宝','银行卡','现金','其他'];
-var PALETTE = ['#F58BA8','#F7C873','#7FD6E8','#F2A2C0','#7FD9C4','#F4A97B','#B4A8E8','#9FD8E8','#F5B7BE','#B9C6CC'];
+var PALETTE = ['#F58BA8','#F2A2C0','#9FD8E8','#FBC4D4','#A8CBE0','#F5B7BE','#B8D4E8','#F79FB8','#B9C6CC','#8AA5B2'];
 var EMOJIS = ['📦','🍜','🛒','🎮','💊','📚','🚕','📱','🏠','🎁','💰','💼','📈','🧧','🧾','✨','☕','🍺','👕','🚇','✈️','🐱','🎬','💡'];
 
 /* ================= 状态 ================= */
@@ -1061,23 +1141,23 @@ function catColor(name){
    消费类目各有一只做对应动作的熊；收入类目复用「其他」那只。
    找不到图时回退到 emoji，所以新增自定义分类不会显示空白。 */
 var CAT_ICONS = {
-  '餐饮':'bears/i-canyin.png',
-  '交通':'bears/i-jiaotong.png',
-  '购物':'bears/i-gouwu.png',
-  '日用':'bears/i-riyong.png',
-  '居住':'bears/i-juzhu.png',
-  '娱乐':'bears/i-yule.png',
-  '医疗':'bears/i-yiliao.png',
-  '学习':'bears/i-xuexi.png',
-  '人情':'bears/i-renqing.png',
-  '通讯':'bears/i-tongxun.png',
-  '其他':'bears/i-other.png',
-  '工资':'bears/i-other.png',
-  '兼职':'bears/i-other.png',
-  '理财':'bears/i-yule.png',
-  '红包':'bears/i-renqing.png',
-  '报销':'bears/i-gouwu.png',
-  '其他收入':'bears/i-other.png'
+  '餐饮':'bears/cat-canyin.png',
+  '交通':'bears/cat-jiaotong.png',
+  '购物':'bears/cat-gouwu.png',
+  '日用':'bears/cat-riyong.png',
+  '居住':'bears/cat-juzhu.png',
+  '娱乐':'bears/cat-yule.png',
+  '医疗':'bears/cat-yiliao.png',
+  '学习':'bears/cat-xuexi.png',
+  '人情':'bears/cat-renqing.png',
+  '通讯':'bears/cat-tongxun.png',
+  '其他':'bears/cat-other.png',
+  '工资':'bears/cat-other.png',
+  '兼职':'bears/cat-other.png',
+  '理财':'bears/cat-yule.png',
+  '红包':'bears/cat-renqing.png',
+  '报销':'bears/cat-gouwu.png',
+  '其他收入':'bears/cat-other.png'
 };
 function catIcon(name){
   var src = CAT_ICONS[name];
@@ -1478,7 +1558,7 @@ function renderChat(){
   recs.sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
   var feed = $('chatFeed');
   if(!recs.length){
-    feed.innerHTML = '<div class="box pad empty"><div class="big"><img src="bears/b1_faq.png" alt=""></div>'
+    feed.innerHTML = '<div class="box pad empty"><div class="big"><img src="bears/tab-ledger.png" alt=""></div>'
       + '<div class="t">都记完啦，熊熊等你哦</div>'
       + '<div class="t">在上面输入「午饭15块」就能记一笔</div></div>';
   } else {
@@ -1575,7 +1655,7 @@ function renderList(){
   }
   var body = $('listBody');
   if(!recs.length){
-    body.innerHTML = '<div class="box pad empty"><div class="big"><img src="bears/b3_wave.png" alt=""></div>'
+    body.innerHTML = '<div class="box pad empty"><div class="big"><img src="bears/tab-stats.png" alt=""></div>'
       + '<div class="t">这个月还没有记录</div></div>';
     return;
   }

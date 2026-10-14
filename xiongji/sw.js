@@ -8,12 +8,25 @@
  * Pages use network-first because cache-first makes users stay on stale versions,
  * especially on iOS home-screen apps where the SW update check rarely fires.
  */
-var CACHE = 'xiongji-v15';
+var CACHE = 'xiongji-v16';
+/* 预缓存：手账拼贴风用到的贴纸。
+   ⚠️ 只列真正用到的，别把 79 张全塞进来（首次安装会变慢）。
+   新增贴纸引用时记得同步这里 + CACHE 版本号 +1。 */
 var BEARS = [
-  './bears/b1_faq.png', './bears/b2_info.png', './bears/b3_wave.png', './bears/b4_panda.png',
-  './bears/i-canyin.png', './bears/i-gouwu.png', './bears/i-jiaotong.png', './bears/i-juzhu.png',
-  './bears/i-other.png', './bears/i-renqing.png', './bears/i-riyong.png', './bears/i-tongxun.png',
-  './bears/i-xuexi.png', './bears/i-yiliao.png', './bears/i-yule.png'
+  /* tab 栏 4 张 */
+  './bears/tab-record.png', './bears/tab-ledger.png', './bears/tab-stats.png', './bears/tab-me.png',
+  /* 11 个消费类目 */
+  './bears/cat-canyin.png', './bears/cat-gouwu.png', './bears/cat-jiaotong.png', './bears/cat-juzhu.png',
+  './bears/cat-other.png', './bears/cat-renqing.png', './bears/cat-riyong.png', './bears/cat-tongxun.png',
+  './bears/cat-xuexi.png', './bears/cat-yiliao.png', './bears/cat-yule.png',
+  /* 装饰用：页头 / 主卡 / 统计卡 / 记录行 / 弹层 */
+  './bears/hero-happy.png', './bears/hero-cash.png', './bears/hero-think.png',
+  './bears/hero-read.png', './bears/hero-sleep.png', './bears/hero-welcome.png',
+  './bears/mark-sparkle.png'
+];
+var FONTS = [
+  /* 站酷快乐体：93 个子集（离线可用） */
+  './fonts/zcoolkuaile.css'
 ];
 var ASSETS = [
   './',
@@ -22,7 +35,7 @@ var ASSETS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png'
-].concat(BEARS);
+].concat(BEARS).concat(FONTS);
 
 self.addEventListener('install', function (e) {
   e.waitUntil(
