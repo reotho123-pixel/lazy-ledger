@@ -1001,7 +1001,15 @@ function spring(el){
    数据形状也保持一致：{ records:{id:rec}, budget, cats, cfg }
    ========================================================================== */
 var LS_KEY = 'xiongji-v1';
-var VERSION = 'v1.5';
+var VERSION = 'v1.6';
+
+/* 被本机改过、需要覆盖回云端的记录 id。
+   GitHub 那边文件已在就算「推过了」，所以自愈/编辑过的一定要在这里登记，
+   否则修复结果永远同步不出去（换台手机拉下来又是旧的）。
+   ⚠️ 必须声明在这里（load/healRecords 之前）：healRecords 在 boot() 里
+   和 load() 一起跑，声明写在第 1900 行附近就太晚了 —— 那时候
+   pushDirty 还是 undefined，赋值直接抛错、自愈整段静默失败。 */
+var pushDirty = {};
 
 var S = { records:{}, budget:0, cats:null, cfg:{ owner:'', repo:'', token:'', auto:false } };
 
@@ -1036,12 +1044,16 @@ function healRecords(){
   Object.keys(S.records).forEach(function(id){
     var r = S.records[id];
     if (!r || !r.raw) return;
-    if (isBadCat(r.category)) {
+    /* ⚠️ 不能用 isBadCat 当门槛：快捷指令把分类写死成「其他」，
+       而「其他」是登记在册的合法分类名，isBadCat('其他') 返回 false，
+       一条停在「其他」的记录就永远进不来 —— 用户事后新加的关键词等于对旧记录无效。 */
+    var c = String(r.category||'').trim();
+    if (!c || c === '其他' || c === '其他收入' || isBadCat(c)) {
       var hit = autoCat(r.raw, r.type) || autoCat(r.note, r.type);
-      if (hit) { r.category = hit; changed = true; }
+      if (hit && hit !== r.category) { r.category = hit; changed = true; pushDirty[id] = true; }
     }
     var acc = guessAccount(r.raw);
-    if (acc && acc !== r.account) { r.account = acc; changed = true; }
+    if (acc && acc !== r.account) { r.account = acc; changed = true; pushDirty[id] = true; }
   });
   if (changed) save();
 }
@@ -2015,16 +2027,27 @@ function sync(){
     var pushChain = Promise.resolve();
     var pushed = 0;
     allRecords().forEach(function(r){
-      if (cloud[r.id]) return;
+      /* 云端已有、但这条被本机改过（自愈/编辑）的，也要重推 ——
+         GitHub 是「只增不改名」，文件存在就跳过的话，
+         修好的分类/支付方式永远同步不出去，换台手机拉下来又是旧的。 */
+      var needsUpdate = cloud[r.id] && pushDirty[r.id];
+      if (cloud[r.id] && !needsUpdate) return;
       pushChain = pushChain.then(function(){
-        return ghApi(repo + '/contents/data/' + encodeURIComponent(r.id) + '.json', {
-          method:'PUT',
-          body: JSON.stringify({
-            message:'add ' + r.id,
-            content: b64(JSON.stringify(cloudRec(r)))
-          })
-        }).then(function(){ pushed++; })
-          .catch(function(e){ console.warn('推送失败', r.id, e); });
+        var doPut = function(sha){
+          var body = { message:(needsUpdate ? 'fix ' : 'add ') + r.id, content: b64(JSON.stringify(cloudRec(r))) };
+          if (sha) body.sha = sha;
+          return ghApi(repo + '/contents/data/' + encodeURIComponent(r.id) + '.json', {
+            method:'PUT', body: JSON.stringify(body)
+          }).then(function(){ pushed++; delete pushDirty[r.id]; })
+            .catch(function(e){ console.warn('推送失败', r.id, e); });
+        };
+        if (needsUpdate) {
+          // 覆盖写必须先拿 sha，否则 GitHub 回 409
+          return ghApi(repo + '/contents/data/' + encodeURIComponent(r.id) + '.json')
+            .then(function(info){ return doPut(info && info.sha); })
+            .catch(function(e){ console.warn('取 sha 失败', r.id, e); });
+        }
+        return doPut(null);
       });
     });
 

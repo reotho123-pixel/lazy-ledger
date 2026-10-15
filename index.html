@@ -694,7 +694,7 @@
 
 /* ================= 常量 ================= */
 var KEY = 'lazy-ledger-v1';
-var VER = 'v4.0.3';
+var VER = 'v4.0.4';
 
 var DEFAULT_CATS = [
   { id:'canyin',  name:'餐饮', emoji:'🍜', color:'#FF7B7B', type:'expense', kw:['饭','餐','吃','喝','午饭','早饭','晚饭','夜宵','外卖','美团','饿了么','食堂','咖啡','奶茶','星巴克','肯德基','麦当劳','汉堡','火锅','烧烤','小吃','米线','麻辣烫','拉面','面馆','牛肉面','盖饭','沙县','黄焖鸡','甜品','蛋糕','豆浆','粥','点心','快餐','简餐','酒馆','水果','买菜'] },
@@ -1018,16 +1018,41 @@ function load(){
   try{
     var raw = localStorage.getItem(KEY);
     if(raw) S = migrate(JSON.parse(raw));
+    var healed = [];
     for(var id in S.records){
       var r = S.records[id];
       if(!r.ts) r.ts = parseTs(r.time);
       if(r.src==='shortcut' && !r.raw) r.raw='';
       if(r.manual) r.auto=false;
-      if(!r.manual && isBadCat(r.category)){
-        r.category = r.type==='income' ? '其他收入' : '其他';
-        var fix = autoCat(r.raw, r.type) || autoCat(r.note, r.type);
-        if(fix){ r.category=fix; r.auto=true; }
+      var catBefore = r.category, accBefore = r.account;
+      /* 存量记录自愈。⚠️ 这里判断「该不该重判」不能用 isBadCat ——
+         「其他 / 其他收入」是登记在册的合法分类名，isBadCat 会返回 false，
+         结果一条停在「其他」的记录永远进不来这个分支：
+         用户事后在分类管理里新加的关键词，对已经存下的记录统统无效。
+         所以额外把「其他 / 其他收入」也当成「没判出来」。
+         用户手动改过的（manual）不碰。 */
+      if(!r.manual){
+        var c = String(r.category||'').trim();
+        if(!c || c==='其他' || c==='其他收入' || isBadCat(c)){
+          var fix = autoCat(r.raw, r.type) || autoCat(r.note, r.type);
+          if(fix){ r.category = fix; r.auto = true; }
+          else if(!c || isBadCat(c)) r.category = r.type==='income' ? '其他收入' : '其他';
+        }
       }
+      /* 支付方式纠正：快捷指令把 account 写死成支付宝，微信账单原文里有
+         「财付通/零钱」，据此把存量记录也改过来。
+         ⚠️ manual 的记录跳过 —— 那是用户手动改过的，他选的支付方式优先。 */
+      if(!r.manual && r.src==='shortcut' && r.raw){
+        var acc = guessAccount(r.raw);
+        if(acc) r.account = acc;
+      }
+      if(r.category!==catBefore || r.account!==accBefore) healed.push(id);
+    }
+    /* 自愈过的记录要回推云端，否则下次从别的设备拉下来又变回旧值。
+       标进 pending，下一次 sync() 就会把这些记录 PUT 回去。 */
+    if(healed.length){
+      for(var k=0;k<healed.length;k++) S.pending[healed[k]] = true;
+      persist();
     }
   }catch(e){}
 }
