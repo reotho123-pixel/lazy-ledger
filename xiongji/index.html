@@ -67,6 +67,16 @@
    （见 JS 里的 lockZoom）。别在 touchend 里 preventDefault，会吃掉 click。 */
 html,body{touch-action:pan-x pan-y; overscroll-behavior:none;}
 
+/* 禁掉长按选中文字 / 长按弹出「拷贝·查询」气泡 / 长按元素被拎起来放大。
+   这三样是 Safari 的行为，出现在 App 里就会「一看就是网页」。
+   -webkit-touch-callout 管的正是那个气泡和"拎起来"的效果，缺它光禁 user-select 不够。
+   注意：输入框必须单独开回来（见下面 input,textarea 那条），
+   否则 token 输入框长按弹不出「粘贴」、记账输入框没法长按改字。 */
+html,body{
+  -webkit-user-select:none;user-select:none;
+  -webkit-touch-callout:none;
+}
+
 /* ⚠️ html 的底色必须是白色 —— iOS 独立 App 模式下视口底部约 47pt 是系统窗口
    背景区（网页渲染不进去），**系统画那条带时取的就是 html 的底色**。
    设成薄荷色就会在底部露出一条薄荷带，看起来像 tab 栏没贴底。
@@ -118,6 +128,13 @@ body::before{
    浏览器的 UA 默认值会把它们按 400 渲染，那 900 那档就白打包了。 */
 button{font-family:inherit; font-weight:900; color:var(--ink); cursor:pointer; border:none; background:none; padding:0;}
 input,select,textarea{font-family:inherit; font-weight:900; color:var(--ink);}
+/* 输入框例外：上面全局禁了长按选中，这里必须把输入类元素开回来，
+   否则 Token 输入框长按弹不出「粘贴」、记账输入框没法长按改字。
+   (-webkit-user-select 是给旧版 iOS Safari 的) */
+input,textarea,select,[contenteditable]{
+  -webkit-user-select:text; user-select:text;
+  -webkit-touch-callout:default;
+}
 input:focus,select:focus,textarea:focus{outline:none;}
 
 /* 标题 / 加粗标签：本地只打包了 900 一档，
