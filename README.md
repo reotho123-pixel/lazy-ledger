@@ -119,7 +119,7 @@ iOS 27 实际可用的动作序列，按顺序搭：
 ## 本地开发
 
 无 node/git 环境，用仓库内 `tools/server.ps1` 起 TCP 静态服务器（127.0.0.1:8765），
-`tools/deploy.ps1` 通过 GitHub REST API 部署（token 从环境变量 `GH_TOKEN` 读取，绝不写盘）。
+或工作区根目录的 `serve-lazy-ledger.ps1`（127.0.0.1:8779，根目录直接指向本目录）。
 改动代码后记得把 `sw.js` 里的 `CACHE` 版本号 +1 再部署。
 
 **一键部署（推荐）**：双击 `tools\deploy-now.bat`，按提示粘贴 token 即可。
@@ -129,5 +129,30 @@ token 在安全输入框里输入（不回显），只在内存里用一次，�
 
 ```powershell
 $env:GH_TOKEN = "ghp_…"
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\deploy.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\_deploy_curl.ps1
 ```
+
+> 部署脚本用 **curl.exe**（`tools\_deploy_curl.ps1`），不是 `Invoke-RestMethod`。
+> 这台机器的 PowerShell 5.1 上传 blob 到 api.github.com 必断连，curl 同一个 token 必成。
+> `tools\deploy.ps1` 是旧版（Invoke-RestMethod），保留作参考，别再直接用。
+> 两个脚本都必须保持**纯 ASCII**：PS 5.1 把无 BOM 的 .ps1 按 ANSI 解析，脚本里写中文会语法报错。
+
+## 版本记录
+
+### v4.0.0 —— 按参考图重做 UI（2026-10-15）
+
+按用户给的三张参考图（银行账户卡 / 项目待办 / 智能家居）**整体重做视觉**，功能按新 UI 重新组织：
+
+- **设计语言**：浅暖灰底 `#F1F0EC` + 纯白卡 + 近黑 `#15171A` 作唯一重色（大数字、主按钮、悬浮底栏）；
+  大圆角（卡片 24–30px）、柔和扩散阴影、深色卡上用细波纹纹理；橙色只做点缀（「全部 ›」、账户卡交叠圆点）
+- **四个页面 + 记一笔**：首页（问候 + **叠放的深色账户卡**，点侧面的卡翻到下一张）/ 明细（**日期条 + 时间轴**，
+  本月最大一笔用深色卡高亮）/ 统计（**刻度表盘** + 概览·分类分段）/ 我的 / 记一笔
+- **悬浮胶囊底栏**：深色圆角条 + 中间白色 ＋ 圆钮（对应参考图底部中央按钮）
+- **贴纸**：用户给的 7 张素材全部用上 —— `goku-1`（首页头像）、`goku-3`（统计页吉祥物）、
+  `goku-4`（空状态 + 关于）、`goku-angry`（明细空状态）、`goku-black-side`（我的页深色卡）、
+  `acct-bg.jpg`（账户卡纹理）、`acct-face.jpg`（本月概览卡），另从正脸照裁了一张方形头像 `acct-avatar.jpg`
+- **底层逻辑全部沿用未改**：GitHub 同步 / 宽松 JSON 坏记录自愈 / 分类词典自动分类 / 快捷指令数据格式 /
+  `localStorage` key 仍是 `lazy-ledger-v1`（老用户数据无缝继承）
+- **修掉两个真问题**：①首次访问时 SW 安装触发的 `controllerchange` 会把页面白刷一次（补 `hadController` 守卫）；
+  ②同一分钟记的两笔 `ts` 相同、排序随机（用 id 兜底比较）
+- SW 清缓存改成**按前缀**（`lazy-ledger-`）：本 App 与子目录的「熊记」同源，无差别清 keys 会误删邻居的离线缓存
