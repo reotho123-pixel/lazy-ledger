@@ -630,7 +630,7 @@
 
 /* ================= 常量 ================= */
 var KEY = 'lazy-ledger-v1';
-var VER = 'v4.0.0';
+var VER = 'v4.0.1';
 
 var DEFAULT_CATS = [
   { id:'canyin',  name:'餐饮', emoji:'🍜', color:'#FF7B7B', type:'expense', kw:['饭','餐','吃','喝','午饭','早饭','晚饭','夜宵','外卖','美团','饿了么','食堂','咖啡','奶茶','星巴克','肯德基','麦当劳','汉堡','火锅','烧烤','小吃','米线','麻辣烫','拉面','面馆','牛肉面','盖饭','沙县','黄焖鸡','甜品','蛋糕','豆浆','粥','点心','快餐','简餐','酒馆','水果','买菜'] },
@@ -1009,12 +1009,26 @@ function guessCat(rec){
   if(cur && !isBadCat(cur) && cur!=='其他' && cur!=='其他收入') return null;
   return autoCat(rec.raw, rec.type) || autoCat(rec.note, rec.type) || null;
 }
+/* 从 OCR 全文里补出金额（云端记录 amount 为空时的兜底）。
+   按优先级依次尝试，第一个命中的就是结果。**顺序很重要，别随便调。**
+     ① 带符号的两位小数    -28.80 / +150.00   （最可靠）
+     ② 数字 + 「元」        28.8元 / 30元
+     ③ 独占一行的数字       28.80 或 30        （支付宝账单页金额常单独一行）
+     ④ 带符号的整数         -30 / +150         （最后的兜底）
+   两个实测踩过的坑：
+     · ①④ 必须加「前面不是数字」守卫 (?<![0-9])，
+       否则日期 "2026-10-13" 里的 "-10" 会抢在真实金额前面被匹配。
+     · ③ 必须排在 ④ 之前，否则同样会被日期碎片抢走。 */
 function parseRawAmount(text){
   var s = String(text||'');
-  var m = s.match(/([+\-])\s*([0-9][0-9,]*\.[0-9]{1,2})/);
+  var m = s.match(/(?<![0-9])([+\-])\s*([0-9][0-9,]*\.[0-9]{1,2})/);
   if(m) return { sign:m[1], value:Math.abs(parseFloat(m[2].replace(/,/g,'')) )||0 };
   m = s.match(/([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*元/);
   if(m) return { sign:'', value:Math.abs(parseFloat(m[1].replace(/,/g,'')) )||0 };
+  m = s.match(/^[ \t]*([+\-]?)([0-9][0-9,]*(?:\.[0-9]{1,2})?)[ \t]*$/m);
+  if(m) return { sign:m[1], value:Math.abs(parseFloat(m[2].replace(/,/g,'')) )||0 };
+  m = s.match(/(?<![0-9])([+\-])\s*([0-9][0-9,]*)(?![0-9.])/);
+  if(m) return { sign:m[1], value:Math.abs(parseFloat(m[2].replace(/,/g,'')) )||0 };
   return null;
 }
 
@@ -1067,7 +1081,11 @@ function looseJson(text){
     escapeCtl(s),
     escapeCtl(s.replace(/:\s*,/g,':0,').replace(/:\s*([}\]])/g,':0$1').replace(/,\s*([}\]])/g,'$1')),
     s.replace(/[\r\n\t]/g, function(c){ return c==='\n'?'\\n':c==='\r'?'\\r':'\\t'; }),
-    escapeCtlSmart(s)
+    escapeCtlSmart(s),
+    /* 云端坏记录实测是「三个毛病同时犯」：amount 后面直接跟逗号、后面多一个
+       游离引号（"src":"shortcut""）、raw 里是真正的换行。前五条各自只能治
+       一两种，凑齐才解析得出来 —— 别删这条。 */
+    escapeCtlSmart(s.replace(/:\s*,/g,':0,').replace(/:\s*([}\]])/g,':0$1').replace(/,\s*([}\]])/g,'$1'))
   ];
   for(var i=0;i<cands.length;i++){
     try{ return { ok:true, obj:JSON.parse(cands[i]), repaired:true }; }catch(e){}
@@ -1093,7 +1111,9 @@ function normalizeRec(r, idFromPath){
   rec.raw = String(r.raw||r.ocr||'').slice(0,2000);
   if(rec.src==='shortcut' && rec.raw && (!rec.amount || rec.amount===0)){
     var pa = parseRawAmount(rec.raw);
-    if(pa && pa.sign==='-') rec.amount = pa.value;
+    /* 只要捞到正数就补上。以前这里写死了 pa.sign==='-'，
+       结果不带符号的账单页金额（28.80 独占一行）永远补不进来。 */
+    if(pa && pa.value>0) rec.amount = pa.value;
   }
   if(isBadCat(rec.category)) rec.category = rec.type==='income'?'其他收入':'其他';
   rec.ts = parseTs(rec.time);

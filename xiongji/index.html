@@ -978,7 +978,7 @@ function spring(el){
    数据形状也保持一致：{ records:{id:rec}, budget, cats, cfg }
    ========================================================================== */
 var LS_KEY = 'xiongji-v1';
-var VERSION = 'v1.0';
+var VERSION = 'v1.1';
 
 var S = { records:{}, budget:0, cats:null, cfg:{ owner:'', repo:'', token:'', auto:false } };
 
@@ -1749,6 +1749,126 @@ function sendChat(){
 }
 
 /* ==========================================================================
+   13.5 云端坏记录的容错解析
+   --------------------------------------------------------------------------
+   快捷指令 OCR 出来的账可能「带病上传」，实测三个毛病会同时出现：
+     · 金额为空          "amount":,
+     · 后面多一个游离引号  "src":"shortcut""
+     · raw 里是真正的换行（JSON 字符串里不允许出现裸换行）
+   这种文本直接 JSON.parse 一定抛错，整条记录就在同步时被静默丢掉 ——
+   用户看到的现象就是「明明记了，App 里却没有」。
+
+   所以这里手写一套宽松解析：先按原样试，再按几种修补组合试。
+   金额补不出来时，从 raw 全文里再捞一次（支付宝账单页金额常独占一行）。
+   ========================================================================== */
+function escapeCtl(s){
+  var out = '', inStr = false, esc = false;
+  for (var i = 0; i < s.length; i++){
+    var ch = s.charAt(i), code = s.charCodeAt(i);
+    if (esc){ out += ch; esc = false; continue; }
+    if (ch === '\\'){ out += ch; esc = true; continue; }
+    if (ch === '"'){ inStr = !inStr; out += ch; continue; }
+    if (inStr && code < 0x20){
+      if (ch === '\n') out += '\\n'; else if (ch === '\r') out += '\\r'; else if (ch === '\t') out += '\\t';
+      else out += '\\u' + ('000' + code.toString(16)).slice(-4);
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+/* 跟 escapeCtl 的区别：字符串里遇到引号，先看后面是不是 , : } ] 或结尾，
+   是才当收尾引号，否则当成内容里的引号转义掉。专门对付 "shortcut"" 这种多出来的引号。 */
+function escapeCtlSmart(s){
+  var out = '', inStr = false, esc = false;
+  for (var i = 0; i < s.length; i++){
+    var ch = s.charAt(i), code = s.charCodeAt(i);
+    if (esc){ out += ch; esc = false; continue; }
+    if (ch === '\\'){ out += ch; esc = true; continue; }
+    if (ch === '"'){
+      if (!inStr){ inStr = true; out += ch; continue; }
+      var j = i + 1, nx = '';
+      while (j < s.length && /\s/.test(s.charAt(j))) j++;
+      nx = s.charAt(j);
+      if (nx === ',' || nx === ':' || nx === '}' || nx === ']' || nx === ''){ inStr = false; out += ch; }
+      else out += '\\"';
+      continue;
+    }
+    if (inStr && code < 0x20){
+      if (ch === '\n') out += '\\n'; else if (ch === '\r') out += '\\r'; else if (ch === '\t') out += '\\t';
+      else out += '\\u' + ('000' + code.toString(16)).slice(-4);
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+function fixEmptyVals(s){
+  return s.replace(/:\s*,/g, ':0,').replace(/:\s*([}\]])/g, ':0$1').replace(/,\s*([}\]])/g, '$1');
+}
+function looseJson(text){
+  var s = String(text == null ? '' : text);
+  try { return { ok:true, obj:JSON.parse(s), repaired:false }; } catch(e){}
+  var cands = [
+    fixEmptyVals(s),
+    escapeCtl(s),
+    escapeCtl(fixEmptyVals(s)),
+    s.replace(/[\r\n\t]/g, function(c){ return c === '\n' ? '\\n' : c === '\r' ? '\\r' : '\\t'; }),
+    escapeCtlSmart(s),
+    /* 三个毛病一起犯的那条 —— 少了它，带病记录一条都救不回来 */
+    escapeCtlSmart(fixEmptyVals(s))
+  ];
+  for (var i = 0; i < cands.length; i++){
+    try { return { ok:true, obj:JSON.parse(cands[i]), repaired:true }; } catch(e){}
+  }
+  return { ok:false, obj:null, repaired:false };
+}
+/* 从 OCR 全文里补金额。顺序有讲究：
+     ① 带符号的两位小数  -28.80      （最可靠）
+     ② 数字 + 「元」      28.8元
+     ③ 独占一行的数字     28.80 / 30  （支付宝账单页金额常单独一行）
+     ④ 带符号的整数       -30
+   ①②④ 都加了「前面不是数字」的守卫，否则日期 2026-10-13 里的 -10 会抢在真金额前被匹配。 */
+function parseRawAmount(text){
+  var s = String(text || '');
+  var m = s.match(/(?<![0-9])([+\-])\s*([0-9][0-9,]*\.[0-9]{1,2})/);
+  if (m) return Math.abs(parseFloat(m[2].replace(/,/g, ''))) || 0;
+  m = s.match(/([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*元/);
+  if (m) return Math.abs(parseFloat(m[1].replace(/,/g, ''))) || 0;
+  m = s.match(/^[ \t]*([+\-]?)([0-9][0-9,]*(?:\.[0-9]{1,2})?)[ \t]*$/m);
+  if (m) return Math.abs(parseFloat(m[2].replace(/,/g, ''))) || 0;
+  m = s.match(/(?<![0-9])([+\-])\s*([0-9][0-9,]*)(?![0-9.])/);
+  if (m) return Math.abs(parseFloat(m[2].replace(/,/g, ''))) || 0;
+  return 0;
+}
+function tsFromTime(t){
+  var m = String(t || '').match(/(\d{4})-(\d{2})-(\d{2})[ _](\d{2}):(\d{2})/);
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime();
+  var p = Date.parse(String(t || '').replace(' ', 'T').replace(/_/g, 'T'));
+  return isNaN(p) ? 0 : p;
+}
+/* 把云端拉下来的一条记录收拾成 App 内部形状。
+   金额为空就翻 raw 找回；没有 ts 就用 time 补，否则排序和分组会乱。 */
+function normalizeCloud(obj, idFromPath){
+  var rec = {
+    id: String(obj.id || idFromPath || ''),
+    type: obj.type === 'income' ? 'income' : 'expense',
+    amount: Math.abs(Number(obj.amount)) || 0,
+    category: String(obj.category || ''),
+    account: String(obj.account || ''),
+    note: String(obj.note || ''),
+    time: String(obj.time || '')
+  };
+  var raw = String(obj.raw || obj.ocr || '');
+  if (raw) rec.raw = raw.slice(0, 2000);
+  if (!rec.amount && raw) rec.amount = parseRawAmount(raw);
+  rec.ts = tsFromTime(rec.time) || Date.now();
+  var names = cats().map(function(c){ return c.name; });
+  if (names.indexOf(rec.category) < 0) rec.category = rec.type === 'income' ? '其他收入' : '其他';
+  return rec;
+}
+
+/* ==========================================================================
    14. GitHub 同步
    --------------------------------------------------------------------------
    数据放用户自己的私有仓库：一笔一个 JSON 文件，只增不改名，规避冲突。
@@ -1840,10 +1960,20 @@ function sync(){
         pullChain = pullChain.then(function(){
           return ghApi(repo + '/contents/data/' + encodeURIComponent(id) + '.json')
             .then(function(info){
-              var obj;
-              if (info && info.content) obj = JSON.parse(unb64(info.content));
-              else if (info && info.amount != null) obj = info;
-              if (obj && obj.amount != null) { S.records[id] = obj; pulled++; }
+              var obj = null;
+              if (info && typeof info.content === 'string' && info.content){
+                /* 带病记录（金额空 / 多引号 / raw 有裸换行）用宽松解析救回来，
+                   别让 JSON.parse 抛错把整条记录吞掉。 */
+                obj = looseJson(unb64(info.content)).obj;
+                if (!obj){
+                  try { obj = JSON.parse(unb64(info.content)); } catch(e){}
+                }
+              } else if (info && info.amount != null){
+                obj = info;
+              }
+              if (!obj) return;
+              var rec = normalizeCloud(obj, id);
+              if (rec.amount > 0) { S.records[rec.id || id] = rec; pulled++; }
             })
             .catch(function(e){ console.warn('拉取失败', id, e); });
         });
