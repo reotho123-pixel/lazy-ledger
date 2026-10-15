@@ -410,6 +410,13 @@ main::-webkit-scrollbar{width:0;}
 .entry .n em{display:block; font-style:normal; font-size:11px; color:var(--ink3); margin-top:1px;}
 .entry .a{font-size:16.5px; flex:none; color:var(--pink);}
 .entry .a.in{color:var(--blue-d);}
+/* 分类编辑里的关键词：点一下就是删掉它，所以做成看得出来的「可点小药丸」 */
+.kw-wrap{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;}
+.kw{
+  background:var(--blue-l); border:1.3px dashed var(--line-soft);
+  border-radius:999px; padding:6px 12px; font-size:12.5px; color:var(--ink2);
+}
+.kw:active{transform:scale(.94);}
 
 /* ---------- 统计页 ---------- */
 /* 上方留出熊探出的 52px（.st-bear top:-52px）。
@@ -994,7 +1001,7 @@ function spring(el){
    数据形状也保持一致：{ records:{id:rec}, budget, cats, cfg }
    ========================================================================== */
 var LS_KEY = 'xiongji-v1';
-var VERSION = 'v1.3';
+var VERSION = 'v1.4';
 
 var S = { records:{}, budget:0, cats:null, cfg:{ owner:'', repo:'', token:'', auto:false } };
 
@@ -2017,9 +2024,10 @@ function openCats(){
     $('sheetBody').innerHTML =
       '<div class="hint" style="font-size:12px;color:var(--ink2);margin-bottom:12px;">' +
         '关键词用于自动分类：记账时文字里出现关键词就归到这个类目。' +
+        '<br>点任意一个分类可以进去改名字、加删关键词。' +
       '</div>' +
       list.map(function(c, i){
-        return '<div class="card entry" style="margin-bottom:9px;">' +
+        return '<div class="card entry" data-edit="' + i + '">' +
           '<div class="dot">' + catIconHtml(c.name) + '</div>' +
           '<div class="n">' + esc(c.name) +
             '<em>' + (c.type === 'income' ? '收入' : '支出') + ' · ' + (c.kw||[]).length + ' 个关键词</em></div>' +
@@ -2035,8 +2043,16 @@ function openCats(){
       '<div class="btn-row"><button class="btn" id="catReset">恢复默认</button>' +
       '<button class="btn primary" id="catAdd">添加</button></div>';
 
+    /* 点整行（除「删」按钮）进入该分类的编辑页 */
+    Array.prototype.forEach.call($('sheetBody').querySelectorAll('[data-edit]'), function(el){
+      el.addEventListener('click', function(e){
+        if (e.target.closest && e.target.closest('[data-del]')) return;
+        openCatEdit(Number(el.getAttribute('data-edit')));
+      });
+    });
     Array.prototype.forEach.call($('sheetBody').querySelectorAll('[data-del]'), function(b){
-      b.onclick = function(){
+      b.onclick = function(e){
+        e.stopPropagation();
         var i = Number(b.getAttribute('data-del'));
         askConfirm('删除分类「' + list[i].name + '」？', function(){
           list.splice(i, 1);
@@ -2057,6 +2073,119 @@ function openCats(){
       list.push({ name:name, type:'expense', kw:kw });
       S.cats = list; save(); paint(); refresh();
       toast('已添加');
+    };
+  }
+  paint();
+  openSheetFrom(window.__lastTap);
+  $('sheetClose').onclick = closeSheet;
+}
+
+/* 单个分类的编辑页：改名字 / 加删关键词 / 换收支方向。
+   关键词做成「点一下就删掉」的小药丸，配一个输入框 + 添加按钮。
+   保存时按名字定位原分类（内置分类没有 id 字段，只能用名字当键）。 */
+function openCatEdit(index){
+  var list = JSON.parse(JSON.stringify(cats()));
+  var c = list[index];
+  if (!c) return;
+  var kws = (c.kw || []).slice();
+  var type = c.type === 'income' ? 'income' : 'expense';
+  var name = c.name;
+
+  $('sheetTitle').textContent = '编辑分类';
+  var body = $('sheetBody');
+
+  /* 重绘前必须先把用户已经敲进去的内容收回来。
+     不然点「收入/支出」或删关键词时整块 innerHTML 重建，
+     刚改好的名字会被原值顶掉（这个坑实测踩到过）。 */
+  function paint(){
+    var nameEl = $('ecName');
+    if (nameEl) name = nameEl.value;
+    var draftEl = $('kwInput');
+    var draft = draftEl ? draftEl.value : '';
+
+    body.innerHTML =
+      '<div class="fld"><span class="lb">名称</span>' +
+        '<input type="text" id="ecName" value="' + esc(name) + '">' +
+      '</div>' +
+      '<div class="fld"><span class="lb">关键词 · <em id="kwCount" style="font-style:normal;color:var(--ink3);">' +
+        kws.length + ' 个</em></span>' +
+        '<div style="display:flex;gap:9px;align-items:center;">' +
+          '<input type="text" id="kwInput" placeholder="加一个词，比如「午饭」" style="flex:1;min-width:0;">' +
+          '<button class="btn primary" id="kwAdd" style="flex:none;padding:13px 18px;font-size:14px;">添加</button>' +
+        '</div>' +
+        '<div class="hint" style="font-size:11.5px;color:var(--ink3);margin-top:8px;">' +
+          '识别时会挑最长的词匹配。点下面的词可以删掉它。' +
+        '</div>' +
+        '<div class="kw-wrap" id="kwWrap"></div>' +
+      '</div>' +
+      '<div class="fld"><span class="lb">收支方向</span>' +
+        '<div class="types" style="margin:0;">' +
+          '<span class="type-pill ready' + (type === 'income' ? ' income' : '') + '" id="ecPill" style="visibility:hidden;"></span>' +
+          '<button class="type-btn' + (type === 'expense' ? ' on-ex' : '') + '" id="ecEx">支出 －</button>' +
+          '<button class="type-btn' + (type === 'income' ? ' on-in' : '') + '" id="ecIn">收入 ＋</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="btn-row">' +
+        '<button class="btn" id="ecBack">返回</button>' +
+        '<button class="btn primary" id="ecSave">保存</button>' +
+      '</div>';
+
+    $('kwWrap').innerHTML = kws.length
+      ? kws.map(function(k, i){ return '<span class="kw" data-i="' + i + '">' + esc(k) + ' ×</span>'; }).join('')
+      : '<span class="hint" style="font-size:12px;margin:0;">还没有关键词</span>';
+
+    Array.prototype.forEach.call($('kwWrap').querySelectorAll('.kw'), function(el){
+      el.addEventListener('click', function(){
+        kws.splice(Number(el.getAttribute('data-i')), 1);
+        paint();
+      });
+    });
+
+    /* 把重绘前没收回来的关键词草稿还回输入框，光标也放回去 */
+    if (draft) {
+      var d = $('kwInput');
+      if (d) { d.value = draft; d.focus(); }
+    }
+
+    /* 滑块就位：输入框渲染完才能量到宽度 */
+    requestAnimationFrame(function(){
+      var pill = $('ecPill'), btn = type === 'income' ? $('ecIn') : $('ecEx');
+      if (!pill || !btn) return;
+      var box = btn.parentNode.getBoundingClientRect();
+      var r = btn.getBoundingClientRect();
+      if (!r.width || !box.width) return;
+      pill.style.width = r.width + 'px';
+      pill.style.transform = 'translateX(' + (r.left - box.left) + 'px)';
+      pill.style.visibility = 'visible';
+    });
+
+    $('kwInput').onkeydown = function(e){ if (e.key === 'Enter') { e.preventDefault(); $('kwAdd').click(); } };
+    $('kwAdd').onclick = function(){
+      var v = String($('kwInput').value || '').trim();
+      /* 逗号分隔可以一次加多个 */
+      var parts = v.split(/[,，、]/).map(function(s){ return s.trim(); }).filter(Boolean);
+      if (!parts.length) { toast('先写一个关键词'); return; }
+      parts.forEach(function(p){ if (kws.indexOf(p) < 0) kws.push(p); });
+      paint();
+      var again = $('kwInput');
+      if (again) again.focus();
+    };
+    $('ecEx').onclick = function(){ type = 'expense'; paint(); };
+    $('ecIn').onclick = function(){ type = 'income'; paint(); };
+    $('ecBack').onclick = function(){ openCats(); };
+    $('ecSave').onclick = function(){
+      var v = String($('ecName').value || '').trim();
+      if (!v) { toast('请填写分类名'); return; }
+      if (list.some(function(x, i){ return i !== index && x.name === v; })) {
+        toast('已有同名分类'); return;
+      }
+      var cur = JSON.parse(JSON.stringify(cats()));
+      cur[index].name = v;
+      cur[index].kw = kws.slice();
+      cur[index].type = type;
+      S.cats = cur; save(); refresh();
+      openCats();
+      toast('已保存');
     };
   }
   paint();
