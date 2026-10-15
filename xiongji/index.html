@@ -863,6 +863,11 @@ html[data-page="stats"] header::after{ display:none; }
         <span class="n">关于</span>
         <span class="d" id="featVer">v1.0</span>
       </button>
+      <button class="card feat" data-act="wipe">
+        <span class="ic"><img src="./assets/bear/hero-shock.png" alt=""></span>
+        <span class="n">清空本机</span>
+        <span class="d" id="featWipe">只清这台手机</span>
+      </button>
       <button class="card feat wide" data-act="update">
         <span class="ic"><img src="./assets/bear/hero-load.png" alt=""></span>
         <span class="n">检查更新</span>
@@ -978,7 +983,7 @@ function spring(el){
    数据形状也保持一致：{ records:{id:rec}, budget, cats, cfg }
    ========================================================================== */
 var LS_KEY = 'xiongji-v1';
-var VERSION = 'v1.1';
+var VERSION = 'v1.2';
 
 var S = { records:{}, budget:0, cats:null, cfg:{ owner:'', repo:'', token:'', auto:false } };
 
@@ -2130,7 +2135,7 @@ function openExport(){
   $('sheetTitle').textContent = '导出数据';
   $('sheetBody').innerHTML =
     '<div class="hint" style="font-size:12px;color:var(--ink2);line-height:1.8;margin-bottom:14px;">' +
-      '导出成 CSV，可用 Excel / 数字表格打开。' +
+      '导出成 JSON 备份文件，包含全部字段，可以再导回来。' +
     '</div>' +
     '<div class="card" style="padding:14px;border-style:solid;margin-bottom:14px;">' +
       '<div style="display:flex;justify-content:space-between;font-size:13.5px;">' +
@@ -2138,27 +2143,38 @@ function openExport(){
       '<div style="display:flex;justify-content:space-between;font-size:13.5px;margin-top:8px;">' +
         '<span>时间范围</span><b>' + from + ' ~ ' + to + '</b></div>' +
       '<div style="display:flex;justify-content:space-between;font-size:13.5px;margin-top:8px;">' +
-        '<span>包含字段</span><b>日期 / 分类 / 金额 / 备注</b></div>' +
+        '<span>包含字段</span><b>时间 / 类型 / 分类 / 金额 / 备注 / 支付方式</b></div>' +
     '</div>' +
     '<div class="btn-row">' +
       '<button class="btn" id="expCancel">取消</button>' +
-      '<button class="btn primary" id="expGo">导出 CSV</button>' +
+      '<button class="btn primary" id="expGo">导出 JSON</button>' +
     '</div>';
 
   $('sheetClose').onclick = closeSheet;
   $('expCancel').onclick = closeSheet;
   $('expGo').onclick = function(){
-    var lines = ['日期,时间,类型,分类,金额,备注,支付方式'];
-    list.forEach(function(r){
-      lines.push([ ymd(r.ts), hm(r.ts), r.type === 'income' ? '收入' : '支出',
-        r.category || '', r.amount, (r.note || '').replace(/,/g,'，'), r.account || '' ].join(','));
-    });
-    var csv = '\ufeff' + lines.join('\r\n');
-    var blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
+    var out = {
+      app: 'xiongji',
+      version: 1,
+      exported_at: new Date().toISOString(),
+      budget: S.budget || 0,
+      records: list.map(function(r){
+        return {
+          id: r.id,
+          type: r.type,
+          amount: r.amount,
+          category: r.category || '',
+          note: r.note || '',
+          account: r.account || '',
+          time: r.time || (ymd(r.ts) + ' ' + hm(r.ts))
+        };
+      })
+    };
+    var blob = new Blob([JSON.stringify(out, null, 2)], { type:'application/json' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url;
-    a.download = '熊记-' + ymd(Date.now()) + '.csv';
+    a.download = '熊记-' + ymd(Date.now()) + '.json';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -2168,6 +2184,45 @@ function openExport(){
   };
 
   openSheetFrom(window.__lastTap);
+}
+
+/* 只清这台手机上的数据，不动云端仓库。
+   为什么要它：同步是「本机有、云端没有就推上去」，光删云端没用 ——
+   本机还留着的话，下次同步又全传回去了。
+   账号配置（用户名/仓库/token）刻意保留，否则用户还得重新填一遍。 */
+function openWipe(){
+  var n = allRecords().length;
+  var configured = cfgReady();
+  $('sheetTitle').textContent = '清空本机数据';
+  $('sheetBody').innerHTML =
+    '<div class="hint" style="font-size:12.5px;color:var(--ink2);line-height:1.9;margin-bottom:14px;">' +
+      '会清掉这台手机上记录的 <b>' + n + ' 笔</b>账目，<b>云端仓库不动</b>。' +
+      (configured
+        ? '<br>云端删过了的话，清完就彻底干净了 —— 本机没有的账目也不会被传上去。'
+        : '<br>你的账号配置会保留，不用重填。') +
+    '</div>' +
+    '<div class="card" style="padding:14px;border-style:solid;margin-bottom:14px;background:var(--pink-l);">' +
+      '<div style="font-size:13px;color:var(--pink-d);line-height:1.9;">' +
+        '这个操作不可撤销。<br>想留底的话先去「导出数据」存一份 JSON。' +
+      '</div>' +
+    '</div>' +
+    '<div class="btn-row">' +
+      '<button class="btn" id="wipeCancel">取消</button>' +
+      '<button class="btn danger" id="wipeGo">清空 ' + n + ' 笔</button>' +
+    '</div>';
+  openSheetFrom(window.__lastTap);
+  $('sheetClose').onclick = closeSheet;
+  $('wipeCancel').onclick = closeSheet;
+  $('wipeGo').onclick = function(){
+    askConfirm('确定清空本机 ' + n + ' 笔账目？云端不受影响，但这个操作不可撤销。', function(){
+      S.records = {};
+      pendingDeletes = [];
+      save();
+      closeSheet();
+      refresh();
+      toast('已清空本机 ' + n + ' 笔');
+    }, '清 空');
+  };
 }
 
 /* ==========================================================================
@@ -2385,6 +2440,7 @@ function bind(){
       if (act === 'export') return openExport();
       if (act === 'sync')   return openSync();
       if (act === 'about')  return openAbout();
+      if (act === 'wipe')   return openWipe();
       if (act === 'update') return checkUpdate();
     });
   });
