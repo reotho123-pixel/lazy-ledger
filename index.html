@@ -518,6 +518,13 @@
   }
   .fld input[type=datetime-local]::-webkit-date-and-time-value{text-align:left; margin:0;}
   .fld input[type=datetime-local]::-webkit-calendar-picker-indicator{margin:0; padding:0; opacity:.55;}
+  .fld textarea{
+    width:100%; min-width:0; max-width:100%; box-sizing:border-box;
+    border:none; outline:none; background:#F6F5F2; border-radius:14px; padding:13px 14px;
+    /* 16px 同样是为了不触发 iOS 的聚焦放大 */
+    font-size:16px; line-height:1.5; resize:vertical;
+  }
+  .fld input[type=file]{font-size:14px; padding:11px 12px;}
   .fld input::placeholder{color:var(--ink3); font-weight:600;}
   .hint{font-size:12px; font-weight:600; color:var(--ink2); margin-top:9px; line-height:1.6;}
   .hint b{font-weight:800; color:var(--ink);}
@@ -687,7 +694,7 @@
 
 /* ================= 常量 ================= */
 var KEY = 'lazy-ledger-v1';
-var VER = 'v4.0.1';
+var VER = 'v4.0.2';
 
 var DEFAULT_CATS = [
   { id:'canyin',  name:'餐饮', emoji:'🍜', color:'#FF7B7B', type:'expense', kw:['饭','餐','吃','喝','午饭','早饭','晚饭','夜宵','外卖','美团','饿了么','食堂','咖啡','奶茶','星巴克','肯德基','麦当劳','汉堡','火锅','烧烤','小吃','米线','麻辣烫','拉面','面馆','牛肉面','盖饭','沙县','黄焖鸡','甜品','蛋糕','豆浆','粥','点心','快餐','简餐','酒馆','水果','买菜'] },
@@ -2480,6 +2487,7 @@ function renderMe(){
 
   var rows2 = '<div class="rows" style="margin-top:14px;">'
     + rowI('export', ICO.out, 'rgba(93,217,232,.20)', '导出数据', 'JSON 备份', n+' 笔')
+    + rowI('import', ICO.down, 'rgba(78,216,180,.18)', '导入数据', '从 JSON 备份恢复', null)
     + rowI('update', ICO.refresh, 'rgba(185,160,240,.20)', '检查更新', '清缓存拿最新版', null)
     + rowI('share', ICO.gift, 'rgba(255,158,196,.20)', '分享给朋友', '复制网址', null)
     + rowI('about', ICO.info, 'rgba(21,23,26,.08)', '关于', null, VER)
@@ -3172,6 +3180,103 @@ function exportJson(){
   toast('已导出 '+out.records.length+' 笔');
 }
 
+/* 导入 JSON 备份。
+   两种来源都认：
+     · 本 App 导出的   { app:'lazy-ledger', records:[…] }
+     · 熊记导出的      { app:'xiongji',     records:[…] }
+     · 以及裸数组      [ {…}, {…} ]        （手写的、别的工具导的都行）
+   合并规则：按 id 走，**已有的跳过、不覆盖**，所以重复导入不会翻倍，
+   也不会把你手机上改过的记录冲掉。导入的记录标 manual=true，
+   这样 App 不会拿自动分类规则去覆盖备份里的分类。 */
+function importSheet(){
+  $('sheetTitle').textContent = '导入数据';
+  $('sheetBody').innerHTML = ''
+    + '<div class="hint" style="margin:0 2px 14px;">'
+    +   '选一个之前导出的 JSON 备份文件，或者把内容直接粘到下面。'
+    +   '<br>和本机已有的记录<b>按 id 合并，已有的不会被覆盖</b>。'
+    + '</div>'
+    + '<div class="fld"><span class="lb">方式一 · 选文件</span>'
+    +   '<input type="file" id="impFile" accept=".json,application/json"></div>'
+    + '<div class="fld"><span class="lb">方式二 · 粘贴内容</span>'
+    +   '<textarea id="impText" rows="6" placeholder=\'{"app":"lazy-ledger","records":[…]} 或 […]\'></textarea>'
+    +   '<div class="hint">整个文件内容全选复制粘进来就行。</div></div>'
+    + '<button class="btn btn-dark btn-full" id="impGo">导入</button>';
+  openSheetMorph();
+  $('sheetX').onclick = closeSheet;
+
+  /* 选文件后直接填进文本框 —— 只用一种确认方式，省得两处都要点。
+     内置浏览器对 file 选择器支持不稳，所以粘贴那条路永远留着。 */
+  var fi = $('impFile');
+  if(fi){
+    fi.onchange = function(){
+      var f = fi.files && fi.files[0];
+      if(!f) return;
+      var fr = new FileReader();
+      fr.onload = function(){ $('impText').value = String(fr.result||''); toast('已读取，点「导入」'); };
+      fr.onerror = function(){ toast('文件读取失败，改用粘贴吧'); };
+      fr.readAsText(f);
+    };
+  }
+  $('impGo').onclick = function(){ doImport($('impText').value); };
+}
+function doImport(text){
+  var txt = String(text||'').trim();
+  if(!txt){ toast('还没选文件或粘内容'); return; }
+
+  /* 用 App 自带的宽松解析兜一层：备份文件本身是合法的，
+     但用户从聊天记录里复制粘贴时可能带上多余引号/换行。 */
+  var parsed = null;
+  try{ parsed = JSON.parse(txt); }catch(e){ parsed = null; }
+  if(!parsed){
+    var p = looseJson(txt);
+    if(p.ok) parsed = p.obj;
+  }
+  if(!parsed){ toast('这段内容不是有效的 JSON'); return; }
+
+  var list = parsed.records ? parsed.records : parsed;
+  if(!Array.isArray(list)){ toast('没找到记录列表（应有 records 字段）'); return; }
+  if(!list.length){ toast('备份里没有记录'); return; }
+
+  var added=0, skipped=0, bad=0;
+  var cats_ = cats();
+  function catExists(name){
+    for(var i=0;i<cats_.length;i++) if(cats_[i].name===name) return true;
+    return false;
+  }
+  list.forEach(function(o){
+    if(!o || typeof o!=='object'){ bad++; return; }
+    var amt = Math.abs(Number(o.amount))||0;
+    if(!amt){ bad++; return; }
+    var id = sanitizeId(o.id||newId());
+    if(S.records[id]){ skipped++; return; }          /* 已有 → 跳过，不覆盖 */
+    var type = o.type==='income' ? 'income' : 'expense';
+    var cat = String(o.category||'').trim();
+    if(!cat || !catExists(cat)) cat = type==='income' ? '其他收入' : '其他';
+    var time = String(o.time||'').trim();
+    if(!/^\d{4}-\d{2}-\d{2}[ _]\d{2}:\d{2}/.test(time)){
+      time = ymdStr(Date.now())+' '+hmStr(Date.now());
+    }
+    var rec = {
+      id: id, type: type, amount: amt, category: cat,
+      note: String(o.note||''), account: String(o.account||'')||'微信支付',
+      time: time.replace('_',' '), src: 'web', manual: true, auto: false
+    };
+    rec.ts = parseTs(rec.time);
+    var rawIn = String(o.raw||'');
+    if(rawIn) rec.raw = rawIn.slice(0,2000);
+    S.records[id] = rec;
+    S.pending[id] = true;                            /* 配了同步就会推上云 */
+    added++;
+  });
+
+  persist(); closeSheet(); renderAll();
+  var msg = '导入 '+added+' 笔';
+  if(skipped) msg += '，跳过 '+skipped+' 笔（已存在）';
+  if(bad)     msg += '，'+bad+' 笔无效';
+  toast(msg);
+  if(added && isCfgOk() && navigator.onLine) sync(false);
+}
+
 /* 静默检查线上版本；有新版本就提示一下，不强制刷新 */
 var updateNotified = false;
 function autoCheckUpdate(){
@@ -3235,6 +3340,7 @@ function bind(){
     else if(a==='about') openAbout();
     else if(a==='share') shareApp();
     else if(a==='export') exportJson();
+    else if(a==='import') importSheet();
     else if(a==='update') checkUpdate();
   });
   $('mask').addEventListener('click', function(e){ if(e.target===$('mask')) closeSheet(); });

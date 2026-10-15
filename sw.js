@@ -8,7 +8,7 @@
  * Pages use network-first because cache-first makes users stay on stale versions,
  * especially on iOS home-screen apps where the SW update check rarely fires.
  */
-var CACHE = 'lazy-ledger-v45';
+var CACHE = 'lazy-ledger-v46';
 /* 只清自己这一族的缓存。本 App 与「熊记」(lazy-ledger/xiongji/) 同源，
    无差别清 keys 会把邻居的离线副本一起删掉。 */
 var CACHE_PREFIX = 'lazy-ledger-';

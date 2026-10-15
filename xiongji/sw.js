@@ -9,7 +9,7 @@
  * 页面走网络优先是必须的：cache-first 会让用户长期停在旧版本，
  * 尤其是 iOS 主屏 App，SW 的更新检查很少自己触发。
  */
-var CACHE = 'bear-journal-v15';
+var CACHE = 'bear-journal-v16';
 /* 同源并存的其它 App 用不同前缀，activate 时只清自己的，别误删邻居的离线副本。
    另外顺手清掉 'xiongji-' —— 那是本 App 改名前的旧前缀，属于自己家的遗留缓存。 */
 var CACHE_PREFIX = 'bear-journal-';
@@ -35,7 +35,7 @@ var ASSETS = [
   './assets/bear/hero-cash.png',  './assets/bear/hero-think.png', './assets/bear/hero-welcome.png',
   './assets/bear/hero-sleep.png', './assets/bear/hero-read.png',  './assets/bear/hero-load.png',
   './assets/bear/hero-clap.png',  './assets/bear/hero-love.png',  './assets/bear/mark-sparkle.png',
-  './assets/bear/hero-shock.png'
+  './assets/bear/hero-shock.png', './assets/bear/hero-boxtop.png'
 ];
 
 self.addEventListener('install', function(e){

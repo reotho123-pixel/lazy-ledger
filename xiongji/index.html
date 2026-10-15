@@ -623,6 +623,12 @@ main::-webkit-scrollbar{width:0;}
   box-shadow:var(--sh-sm);
 }
 .fld input::placeholder{color:var(--ink3);}
+.fld textarea{
+  width:100%; padding:13px 15px; font-size:15px; line-height:1.5; resize:vertical;
+  background:var(--paper); border:1.5px dashed var(--line); border-radius:var(--r-sm);
+  box-shadow:var(--sh-sm);
+}
+.fld input[type=file]{padding:11px 12px; font-size:13.5px;}
 .amount-box{
   padding:12px 15px; border-radius:var(--r-md);
   background:var(--pink-l); border:1.5px dashed rgba(245,139,168,.5);
@@ -853,6 +859,11 @@ html[data-page="stats"] header::after{ display:none; }
         <span class="n">导出数据</span>
         <span class="d" id="featExp">—</span>
       </button>
+      <button class="card feat" data-act="import">
+        <span class="ic"><img src="./assets/bear/hero-boxtop.png" alt=""></span>
+        <span class="n">导入数据</span>
+        <span class="d" id="featImp">从 JSON 备份恢复</span>
+      </button>
       <button class="card feat" data-act="sync">
         <span class="ic"><img src="./assets/bear/hero-clap.png" alt=""></span>
         <span class="n">GitHub 同步</span>
@@ -983,7 +994,7 @@ function spring(el){
    数据形状也保持一致：{ records:{id:rec}, budget, cats, cfg }
    ========================================================================== */
 var LS_KEY = 'xiongji-v1';
-var VERSION = 'v1.2';
+var VERSION = 'v1.3';
 
 var S = { records:{}, budget:0, cats:null, cfg:{ owner:'', repo:'', token:'', auto:false } };
 
@@ -2186,6 +2197,100 @@ function openExport(){
   openSheetFrom(window.__lastTap);
 }
 
+/* 导入 JSON 备份。
+   两种来源都认：
+     · 熊记导出的   { app:'xiongji', records:[…] }
+     · 记账导出的   { app:'lazy-ledger', records:[…] }
+     · 以及裸数组   [ {…}, {…} ]
+   合并规则：按 id 走，**已有的跳过、不覆盖**，所以重复导入不会翻倍。
+   导入的记录不参与自动分类（分类以备份里的为准）。 */
+function openImport(){
+  $('sheetTitle').textContent = '导入数据';
+  $('sheetBody').innerHTML =
+    '<div class="hint" style="font-size:12.5px;color:var(--ink2);line-height:1.9;margin-bottom:14px;">' +
+      '选一个之前导出的 JSON 备份，或者把内容直接粘到下面。' +
+      '<br>和本机已有的记录<b>按 id 合并，已有的不会被覆盖</b>。' +
+    '</div>' +
+    '<div class="fld"><span class="lb">方式一 · 选文件</span>' +
+      '<input type="file" id="impFile" accept=".json,application/json"></div>' +
+    '<div class="fld"><span class="lb">方式二 · 粘贴内容</span>' +
+      '<textarea id="impText" rows="6" placeholder="把备份文件的内容整段贴进来"></textarea></div>' +
+    '<div class="btn-row">' +
+      '<button class="btn" id="impCancel">取消</button>' +
+      '<button class="btn primary" id="impGo">导入</button>' +
+    '</div>';
+  openSheetFrom(window.__lastTap);
+  $('sheetClose').onclick = closeSheet;
+  $('impCancel').onclick = closeSheet;
+
+  /* 选文件后直接把内容填进文本框，只用一种确认方式。
+     内置浏览器对 file 选择器支持不稳，所以粘贴那条路永远留着。 */
+  var fi = $('impFile');
+  if (fi) {
+    fi.onchange = function(){
+      var f = fi.files && fi.files[0];
+      if (!f) return;
+      var fr = new FileReader();
+      fr.onload = function(){ $('impText').value = String(fr.result || ''); toast('已读取，点「导入」'); };
+      fr.onerror = function(){ toast('文件读取失败，改用粘贴吧'); };
+      fr.readAsText(f);
+    };
+  }
+  $('impGo').onclick = function(){ doImport($('impText').value); };
+}
+function doImport(text){
+  var txt = String(text || '').trim();
+  if (!txt) { toast('还没选文件或粘内容'); return; }
+
+  /* 兜一层宽松解析：从聊天记录复制粘贴时容易带上多余引号/换行 */
+  var parsed = null;
+  try { parsed = JSON.parse(txt); } catch(e){ parsed = null; }
+  if (!parsed) {
+    var p = looseJson(txt);
+    if (p.ok) parsed = p.obj;
+  }
+  if (!parsed) { toast('这段内容不是有效的 JSON'); return; }
+
+  var list = parsed.records ? parsed.records : parsed;
+  if (!Array.isArray(list)) { toast('没找到记录列表（应有 records 字段）'); return; }
+  if (!list.length) { toast('备份里没有记录'); return; }
+
+  var names = cats().map(function(c){ return c.name; });
+  var added = 0, skipped = 0, bad = 0;
+
+  list.forEach(function(o){
+    if (!o || typeof o !== 'object') { bad++; return; }
+    var amt = Math.abs(Number(o.amount)) || 0;
+    if (!amt) { bad++; return; }
+    var id = String(o.id || ('r' + Date.now().toString(36) + Math.random().toString(36).slice(2,7)));
+    if (S.records[id]) { skipped++; return; }        /* 已有 → 跳过，不覆盖 */
+    var type = o.type === 'income' ? 'income' : 'expense';
+    var cat = String(o.category || '').trim();
+    if (names.indexOf(cat) < 0) cat = type === 'income' ? '其他收入' : '其他';
+    var time = String(o.time || '').trim().replace('_', ' ');
+    var ts = tsFromTime(time);
+    if (!ts) {
+      time = ymd(Date.now()) + ' ' + hm(Date.now());
+      ts = Date.now();
+    }
+    var rec = {
+      id: id, type: type, amount: round2(amt), category: cat,
+      note: String(o.note || ''), account: String(o.account || '') || '微信支付',
+      time: time, ts: ts
+    };
+    var rawIn = String(o.raw || '');
+    if (rawIn) rec.raw = rawIn.slice(0, 2000);
+    S.records[id] = rec;
+    added++;
+  });
+
+  save(); closeSheet(); refresh();
+  var msg = '导入 ' + added + ' 笔';
+  if (skipped) msg += '，跳过 ' + skipped + ' 笔（已存在）';
+  if (bad)     msg += '，' + bad + ' 笔无效';
+  toast(msg);
+}
+
 /* 只清这台手机上的数据，不动云端仓库。
    为什么要它：同步是「本机有、云端没有就推上去」，光删云端没用 ——
    本机还留着的话，下次同步又全传回去了。
@@ -2438,6 +2543,7 @@ function bind(){
       var act = el.getAttribute('data-act');
       if (act === 'cats')   return openCats();
       if (act === 'export') return openExport();
+      if (act === 'import') return openImport();
       if (act === 'sync')   return openSync();
       if (act === 'about')  return openAbout();
       if (act === 'wipe')   return openWipe();
