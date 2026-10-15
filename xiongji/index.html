@@ -6,17 +6,26 @@
 <meta name="format-detection" content="telephone=no">
 <title>熊记</title>
 <meta name="description" content="手账风记账 · 快捷指令自动记账 · 数据存自己的 GitHub 私有仓库 · 离线可用">
-<!-- theme-color 设为白色：iOS 独立 App 模式下视口底部约 47pt 是系统窗口背景区
-     （网页渲染不进去），它的填色跟这里 / manifest 的 background_color 走。
-     设成白色才能和底部 tab 栏连成一片，不然会露出一条薄荷色带。 -->
-<meta name="theme-color" content="#FFFFFF">
+<!-- theme-color = 薄荷底色：iOS 独立 App 模式下屏幕顶部约 47pt 是状态栏区
+     （网页渲染不进去），它的填色跟这里 / manifest 的 theme_color 走。
+     页面顶部本来就是薄荷色（body::before 铺的），同色才不会在状态栏下露一条异色带。
+     ⚠️ 2026-10-15 之前这里是白色 —— 那是配合 black-translucent 的临时补丁
+     （当时系统带在**底部**、设白是为了和白色 tab 栏连成一片）；换成 default 后
+     系统带移到顶部、补丁的理由消失了，颜色跟着页面顶部走才对。 -->
+<meta name="theme-color" content="#B5DEE6">
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" type="image/png" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
 <link rel="stylesheet" href="./assets/fonts/notosans.css">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- ⚠️ 必须是 default，不要改成 black-translucent。
+     2026-10-14 真机实测：black-translucent 下 iOS 让网页铺到状态栏底下，
+     但把**屏幕最底那 47px** 让出去 —— 视口底比屏幕底高 47px，底栏永远悬空。
+     诊断数据：innerHeight 797 vs screen.height 844，差 47。
+     （同一天懒人记账也是这个病，改成本值后用户确认修好。）
+     注意：改这个 meta 必须**删掉主屏图标重新添加**才生效，iOS 会缓存。 -->
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="熊记">
 
 <style>
@@ -77,14 +86,16 @@ html,body{
   -webkit-touch-callout:none;
 }
 
-/* ⚠️ html 的底色必须是白色 —— iOS 独立 App 模式下视口底部约 47pt 是系统窗口
-   背景区（网页渲染不进去），**系统画那条带时取的就是 html 的底色**。
-   设成薄荷色就会在底部露出一条薄荷带，看起来像 tab 栏没贴底。
-   页面真正的薄荷底 + 波点由下面的 body::before 铺满视口（见那条注释）。 */
+/* ⚠️ html 的底色跟页面顶部保持一致（薄荷）。iOS 独立 App 模式下屏幕最顶约 47pt
+   是状态栏区（网页渲染不进去），**系统画那条带的取色来源之一就是 html 的底色**
+   （另一个是 theme-color）。设成白色会在薄荷色页面顶上压出一条白带。
+   页面真正的薄荷底 + 波点由下面的 body::before 铺满视口（见那条注释）。
+   ⚠️ 2026-10-15 改成 status-bar-style=default 之后才有这条：此前系统带在**底部**、
+   紧挨着白色 tab 栏，所以那时 html 底色必须是白色。带子挪到顶部后，颜色要跟着顶部走。 */
 html{
   -webkit-text-size-adjust:100%; overflow-anchor:none;
   height:100%; overflow:hidden;
-  background-color:#FFFFFF;
+  background-color:var(--page);
 }
 body{
   /* ⚠️ 高度必须由 JS 写 --app-h，**不要改成 height:100% / 100vh / 100dvh**。
@@ -113,16 +124,17 @@ body{
   letter-spacing:-1px;
 }
 /* 薄荷底 + 白波点：固定铺满视口，垫在所有内容之下。
-   底色放在这一层而不是 html 上，是为了让 html 保持白色（见上面那条注释）。 */
+   （html 的底色也是薄荷，见上面那条注释 —— 两层同色，状态栏区就不露异色带。） */
 body::before{
   content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
   background-color:var(--page);
   background-image:radial-gradient(#FFFFFF 2.2px, transparent 2.5px);
   background-size:14px 14px;
 }
-/* 独立 App 模式下视口底部约 47pt 是 iOS 窗口背景区（网页渲染不进去），
-   那里由系统填成白色、和 tab 栏同色；视口最底部本来就被 tab 栏盖住，
-   所以波点不需要再做渐隐。 */
+/* 底部不需要再做渐隐：视口最底部本来就被 tab 栏盖住。
+   2026-10-15 之前这里写的是「视口底部约 47pt 是 iOS 窗口背景区、由系统填白」——
+   那是 black-translucent 时代的事；改成 default 后系统带移到**顶部**（状态栏区），
+   底部不再有那条带。 */
 
 /* 按钮 / 输入框的字重也要跟着钉到 900：控件不继承 body 的字重，
    浏览器的 UA 默认值会把它们按 400 渲染，那 900 那档就白打包了。 */
@@ -481,15 +493,14 @@ main::-webkit-scrollbar{width:0;}
 .foot-note{font-size:11.5px; color:var(--ink2); text-align:center; line-height:1.9; padding:2px 10px 6px;}
 
 /* ---------- 底部任务栏 ----------
-   ⚠️ 独立 App 模式下，网页视口比屏幕矮约 47pt（iOS 的窗口背景区，网页画不进去），
-   那条带由系统按 manifest 的 background_color 填色。
-   所以 manifest 的 background_color 设成白色 = 和本栏同色，视觉上就一路贴到屏幕底。
-   若改成本栏其它颜色，记得同步改 manifest.json，否则底部会露出一条异色带。
-
    ⚠️ 底部内边距不再按 safe-area 叠加：
    独立模式下可视区**已经包含** Home Indicator 那段，再补一次 safe-area 等于留两遍，
    底栏会浮起来约 34px（这就是"任务栏有点高"的来源）。
-   与「待会吃什么 / 懒人记账 / 坚持 / 电子收纳」四处保持同一做法：写死 8px。 */
+   与「待会吃什么 / 懒人记账 / 坚持 / 电子收纳」四处保持同一做法：写死 8px。
+
+   ⚠️ 2026-10-15：真正让底栏贴底的是 <head> 里的 status-bar-style=default
+   （black-translucent 会让视口底比屏幕底高 47px，改多少 CSS 都没用）。
+   这里的内边距写死是另一件事 —— 两者都要对，底栏才既贴底又不浮起。 */
 .tabbar{
   position:fixed; left:0; right:0; bottom:0; z-index:40;
   background:var(--paper); border-top:1.5px dashed var(--line);
