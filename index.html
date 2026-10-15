@@ -62,6 +62,15 @@
   /* 禁止双指捏合缩放：viewport 的 user-scalable=no 在 iOS 上会被忽略，touch-action 才管用。
      双击放大也用这条压掉（别用 touchend preventDefault，会吃掉 click）。 */
   html,body{touch-action:pan-x pan-y; overscroll-behavior:none;}
+  /* 禁掉长按选中文字 / 长按弹出「拷贝·查询」气泡 / 长按元素被拎起来放大。
+     这三样是 Safari 的行为，出现在 App 里就会「一看就是网页」。
+     -webkit-touch-callout 管的正是那个气泡和"拎起来"的效果，缺它光禁 user-select 不够。
+     注意：输入框必须单独开回来（见下面 input,select,textarea 那条），
+     否则 Token 输入框长按弹不出「粘贴」、记账输入框没法长按改字。 */
+  html,body{
+    -webkit-user-select:none;user-select:none;
+    -webkit-touch-callout:none;
+  }
   html{-webkit-text-size-adjust:100%; overflow-anchor:none; height:100%; overflow:hidden; background:var(--bg);}
   body{
     height:100%;
@@ -74,6 +83,13 @@
   }
   button{font-family:inherit; font-weight:700; color:inherit; cursor:pointer; border:none; background:none; padding:0;}
   input,select,textarea{font-family:inherit; font-weight:600; color:var(--ink);}
+  /* 输入框例外：上面全局禁了长按选中，这里必须把输入类元素开回来，
+     否则 Token 输入框长按弹不出「粘贴」、记账输入框没法长按改字。
+     (-webkit-user-select 是给旧版 iOS Safari 的) */
+  input,textarea,select,[contenteditable]{
+    -webkit-user-select:text; user-select:text;
+    -webkit-touch-callout:default;
+  }
   /* 干掉数字输入框自带的上下箭头（桌面浏览器上很丑，手机没有但截图会露） */
   input[type=number]::-webkit-outer-spin-button,
   input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
