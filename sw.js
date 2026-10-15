@@ -8,7 +8,7 @@
  * Pages use network-first because cache-first makes users stay on stale versions,
  * especially on iOS home-screen apps where the SW update check rarely fires.
  */
-var CACHE = 'lazy-ledger-v41';
+var CACHE = 'lazy-ledger-v42';
 /* 只清自己这一族的缓存。本 App 与「熊记」(lazy-ledger/xiongji/) 同源，
    无差别清 keys 会把邻居的离线副本一起删掉。 */
 var CACHE_PREFIX = 'lazy-ledger-';
@@ -22,21 +22,22 @@ var ASSETS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
-  './stickers/goku-1.png',
   './stickers/goku-3.png',
   './stickers/goku-4.png',
-  './stickers/goku-angry.png',
   './stickers/goku-black-side.png',
   './stickers/acct-face.jpg',
   './stickers/acct-bg.jpg',
-  './stickers/manga-01.jpg',
-  './stickers/manga-02.jpg',
-  './stickers/manga-03.jpg',
   './stickers/manga-04.jpg',
-  './stickers/manga-05.jpg',
   './stickers/manga-06.jpg',
   './stickers/manga-wide-01.jpg',
-  './stickers/manga-wide-02.jpg'
+  './stickers/manga-wide-02.jpg',
+  './stickers/px-happy.png',
+  './stickers/px-smile.png',
+  './stickers/px-trunks.png',
+  './stickers/px-angry.png',
+  './stickers/px-goku-black.png',
+  './stickers/px-tab2.png',
+  './stickers/px-tab3.png'
 ];
 
 self.addEventListener('install', function (e) {

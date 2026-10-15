@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <meta name="format-detection" content="telephone=no">
-<title>懒人记账</title>
+<title>记账</title>
 <meta name="description" content="iPhone 快捷指令自动记账 · 说一句记账 · 统计，离线可用，数据同步到你的 GitHub 私有仓库">
 <meta name="theme-color" content="#F1F0EC">
 <link rel="manifest" href="./manifest.json">
@@ -16,7 +16,7 @@
      2026-10-14 真机实测：black-translucent 下 iOS 会让网页铺到状态栏底下，
      但把**屏幕最底那 47px** 让出去 —— 视口底比屏幕底高 47px，底栏永远悬空。 -->
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="懒人记账">
+<meta name="apple-mobile-web-app-title" content="记账">
 <script>
 /* 首屏就判定是否「独立 App 模式」（加到主屏后从图标启动）——必须在 CSS 生效前设置，
    否则会先按 Safari 模式渲染一帧（底部多留一段安全区）再跳到正确位置。 */
@@ -210,7 +210,8 @@
   .dchip{
     flex:none; width:52px; padding:8px 0 9px; border-radius:16px; background:var(--card);
     box-shadow:var(--sh); display:flex; flex-direction:column; align-items:center; gap:2px;
-    transition:transform .16s ease;
+    /* ⚠️ 这里不能有 transform 过渡：让位期间每个 chip 的 transform 由 JS 每帧写，
+       再叠一层 transition 会互相打架（FLIP 的「瞬时回位」会被拖成慢动作）。 */
   }
   .dchip .d1{font-size:16px; font-weight:800; font-variant-numeric:tabular-nums;}
   .dchip .d2{font-size:10.5px; font-weight:600; color:var(--ink2);}
@@ -220,7 +221,48 @@
   .dchip.on .d1,.dchip.on .d2{color:#fff;}
   .dchip.on .d3{background:var(--amber);}
   .dchip.wide{width:auto; padding-left:14px; padding-right:14px; justify-content:center;}
-  .dchip:active{transform:scale(.95);}
+  /* 标签让位（Expanding Tag Selection）：选中的标签真实变宽，邻居靠 FLIP 平滑让位。
+     ⚠️ 宽度必须用具体像素（min-width）而不是 width:auto —— 短标签（"1"）在 auto 下
+     不会比默认宽，选中态就看不出来，邻居也就无从让位。
+     让位期间每个 chip 的 transform 由 JS 每帧写，所以这里不能有 transform 过渡。 */
+  .dchip.sel{width:auto; min-width:74px; padding-left:14px; padding-right:14px;}
+  .dchip.sel .d1{font-size:17px;}
+  .dchip.sel .d2{color:rgba(255,255,255,.78);}
+
+  /* ---------- 明细：日历（点月份按钮形变展开） ---------- */
+  #cal{
+    position:absolute; z-index:70; background:var(--card); border-radius:26px;
+    box-shadow:var(--sh2); overflow:hidden; display:none;
+  }
+  #cal.show{display:block;}
+  #cal.morphing{pointer-events:none;}
+  #calInner{padding:16px 16px 14px;}
+  .cal-top{display:flex; align-items:center; gap:8px; margin-bottom:12px;}
+  .cal-top .cm{font-size:16px; font-weight:800; font-variant-numeric:tabular-nums;}
+  .cal-top .cy{font-size:12.5px; font-weight:600; color:var(--ink2); margin-left:2px;}
+  .cal-top .nav{margin-left:auto; display:flex; gap:6px;}
+  .cal-top .nav button{width:32px; height:32px; border-radius:50%; background:var(--bg); display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:700;}
+  .cal-top .nav button:active{background:#E7E5E0;}
+  .cal-wk{display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:2px; margin-bottom:4px;}
+  .cal-wk span{text-align:center; font-size:11px; font-weight:700; color:var(--ink3); padding:4px 0;}
+  /* ⚠️ 必须 minmax(0,1fr)：纯 1fr 等于 minmax(auto,1fr)，某一格内容偏宽时会把
+     整条轨道撑大 → 7 列装不进容器，日期错位、卡片右缘溢出被裁。 */
+  .cal-grid{display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:2px;}
+  .cal-grid button{
+    aspect-ratio:1; min-width:0; border-radius:12px; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:2px; font-size:14px; font-weight:700;
+    font-variant-numeric:tabular-nums; color:var(--ink); transition:background .15s;
+    overflow:hidden;
+  }
+  .cal-grid button.empty{visibility:hidden;}
+  .cal-grid button.today{box-shadow:inset 0 0 0 2px var(--ink);}
+  .cal-grid button.has{background:#F2F0EB;}
+  .cal-grid button.on{background:var(--dark); color:#fff;}
+  .cal-grid button .cd{width:4px; height:4px; border-radius:50%; background:var(--accent);}
+  .cal-grid button.on .cd{background:var(--amber);}
+  .cal-foot{display:flex; gap:8px; margin-top:12px;}
+  .cal-foot button{flex:1; padding:11px 0; border-radius:999px; font-size:13.5px; font-weight:700; background:var(--bg);}
+  .cal-foot button.primary{background:var(--dark); color:#fff;}
 
   /* ---------- 明细：时间轴 ---------- */
   .tl{position:relative; padding-left:26px;}
@@ -386,6 +428,10 @@
   }
   html[data-standalone="1"] #sheet{padding-bottom:14px;}
   @keyframes sheetUp{from{transform:translateY(40px);} to{transform:none;}}
+  /* Trigger Morph 期间：外壳由 WAAPI 控制几何，内容整体延迟淡入。
+     形变中必须裁掉溢出的内容，否则文字会跟着尺寸被拉伸。 */
+  #sheet.morphing{animation:none; overflow:hidden; pointer-events:none;}
+  #sheet.morphing > *{pointer-events:none;}
   .sheet-head{
     position:sticky; top:0; z-index:3; background:var(--bg);
     padding:16px 20px 10px; display:flex; align-items:center; gap:10px;
@@ -538,13 +584,19 @@
 <!-- ============ 弹层 ============ -->
 <div id="mask">
   <div id="sheet">
-    <div class="sheet-head">
-      <h2 id="sheetTitle">记一笔</h2>
-      <button class="x" id="sheetX" aria-label="关闭"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 5l14 14M19 5 5 19"/></svg></button>
+    <!-- 形变展开时只有这一层做内容淡入，外壳几何由 WAAPI 控制 -->
+    <div id="sheetInner">
+      <div class="sheet-head">
+        <h2 id="sheetTitle">记一笔</h2>
+        <button class="x" id="sheetX" aria-label="关闭"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 5l14 14M19 5 5 19"/></svg></button>
+      </div>
+      <div class="sheet-body" id="sheetBody"></div>
     </div>
-    <div class="sheet-body" id="sheetBody"></div>
   </div>
 </div>
+
+<!-- ============ 日历（点月份按钮形变展开） ============ -->
+<div id="cal"><div id="calInner"></div></div>
 
 <!-- ============ 二次确认层（内置浏览器会静默拦掉原生 confirm，只能自己做） ============ -->
 <div id="cfm">
@@ -616,6 +668,158 @@ function catIcon(name){ var id = CAT_ICON[name]; return id ? ('./stickers/cat/' 
 var ACCOUNT_NAMES = ['微信支付','支付宝','银行卡','现金','其他'];
 var PALETTE = ['#FF7B7B','#FFC93C','#5DD9E8','#FF9EC4','#4ED8B4','#FF9F45','#B9A0F0','#7FDDC4','#FFB3BA','#C9C2B0'];
 var EMOJIS = ['📦','🍜','🛒','🎮','💊','📚','🚕','📱','🏠','🎁','💰','💼','📈','🧧','🧾','✨','☕','🍺','👕','🚇','✈️','🐱','🎬','💡'];
+
+/* ================= 动效：Trigger Morph（从按钮形变展开） =================
+   点按钮 → 面板从这颗按钮的形状长出来，而不是从屏幕底部滑入。
+   起点必须实时量被点按钮的真实矩形（宽度随文案/屏宽变化，不能硬编码），
+   圆角与尺寸一起插值（起点胶囊 → 终点面板圆角），内容延迟到 ~62% 才淡入，
+   关闭原路收回按钮（不是滑出屏幕）。
+   用 WAAPI 而非弹簧：需要可反向播放、可暂停到任意进度。
+   注意两个坑：① onfinish 里再 cancel() 会让回调永不触发 → 用 finished.then()
+   ② 事件必须在初始化阶段绑定，不能写在 play() 里（否则第一次点不开） */
+var morphAnim = null;
+var reduceMotion = false;
+try{ reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }catch(e){}
+
+/* 记下最近被点的按钮（事件委托里拿不到「哪个按钮被点」，捕获阶段记下来） */
+document.addEventListener('pointerdown', function(e){
+  var t = e.target && e.target.closest ? e.target.closest('button,[data-morph]') : null;
+  if(t) window.__morphSrc = t;
+}, true);
+
+/* 把 el 从 srcEl 的形状长到它自己的最终几何 */
+function morphOpen(el, srcEl, onDone){
+  var src = srcEl || window.__morphSrc;
+  if(!src || !el){ if(onDone) onDone(); return; }
+  var br = src.getBoundingClientRect();
+  var tr = el.getBoundingClientRect();
+  if(!tr.width || !tr.height){ if(onDone) onDone(); return; }
+
+  if(reduceMotion){
+    el.classList.remove('morphing');
+    if(onDone) onDone();
+    return;
+  }
+  el.classList.add('morphing');
+  var dx = br.left - tr.left, dy = br.top - tr.top;
+  var radiusTo = (el.id === 'cal') ? '26px' : '30px 30px 0 0';
+  var a1 = el.animate([
+    { transform:'translate('+dx+'px,'+dy+'px)', width:br.width+'px', height:br.height+'px',
+      borderRadius:'999px', opacity:.55 },
+    { transform:'translate(0,0)', width:tr.width+'px', height:tr.height+'px',
+      borderRadius:radiusTo, opacity:1 }
+  ], { duration:620, easing:'cubic-bezier(.22,.9,.24,1)', fill:'both' });
+  /* 内容延迟淡入：面板长到约 62% 才显示，否则文字被横向压扁。
+     内容层不做尺寸/缩放动画。 */
+  var inner = el.firstElementChild;
+  var a2 = null;
+  if(inner){
+    a2 = inner.animate([
+      { opacity:0, transform:'translateY(14px)' },
+      { opacity:0, transform:'translateY(14px)', offset:.62 },
+      { opacity:1, transform:'translateY(0)' }
+    ], { duration:620, easing:'ease-out', fill:'both' });
+  }
+  morphAnim = [a1, a2];
+  a1.finished.then(function(){
+    el.classList.remove('morphing');
+    /* 撤掉 fill：让面板回到自然布局（不写内联几何，避免压住后续布局） */
+    if(a1.cancel) a1.cancel();
+    if(a2 && a2.cancel) a2.cancel();
+    morphAnim = null;
+    if(onDone) onDone();
+  }).catch(function(){
+    el.classList.remove('morphing');
+    if(onDone) onDone();
+  });
+}
+
+/* 关闭：原路收回按钮。内容先淡出（220ms），外壳再缩回（420ms）。 */
+function morphClose(el, srcEl, onDone){
+  var src = srcEl || window.__morphSrc;
+  var finish = function(){
+    el.classList.remove('morphing');
+    el.classList.remove('show');
+    if(onDone) onDone();
+  };
+  if(reduceMotion || !src || !el.classList.contains('show')){ finish(); return; }
+  var br = src.getBoundingClientRect();
+  var tr = el.getBoundingClientRect();
+  if(!tr.width || !tr.height){ finish(); return; }
+  var dx = br.left - tr.left, dy = br.top - tr.top;
+  var radiusTo = (el.id === 'cal') ? '26px' : '30px 30px 0 0';
+  el.classList.add('morphing');
+  var dx = br.left - tr.left, dy = br.top - tr.top;
+  var radiusTo = (el.id === 'cal') ? '26px' : '30px 30px 0 0';
+  var inner = el.firstElementChild;
+  if(inner){
+    inner.animate([{opacity:1},{opacity:0}], { duration:220, easing:'ease-in', fill:'both' });
+  }
+  var a1 = el.animate([
+    { transform:'translate(0,0)', width:tr.width+'px', height:tr.height+'px', borderRadius:radiusTo, opacity:1 },
+    { transform:'translate('+dx+'px,'+dy+'px)', width:br.width+'px', height:br.height+'px',
+      borderRadius:'999px', opacity:.4 }
+  ], { duration:420, easing:'cubic-bezier(.4,0,.7,.3)', fill:'both' });
+  /* ★ 用 finished 收尾：在 onfinish 里再 cancel 会变成 oncancel，回调永不触发 */
+  a1.finished.then(finish).catch(finish);
+}
+
+/* ================= 动效：标签让位（Expanding Tag Selection，FLIP） =================
+   选中项真实变宽 → 邻项按布局变化平滑让位。
+   必须用真实布局测量（getBoundingClientRect / offsetLeft），小屏折行时硬算一定错。
+   命中判定挂在**外层固定容器**上：动画期间标签在 transform 中，命中区域会跟着抖。 */
+function flipTagRow(container, els, activeIdx){
+  if(!container || !els.length) return;
+  var before = els.map(function(el){
+    var r = el.getBoundingClientRect();
+    return { l:r.left, t:r.top, w:r.width, h:r.height };
+  });
+  /* 真实切换布局（触发重排/折行） */
+  els.forEach(function(el, i){ el.classList.toggle('sel', i === activeIdx); el.classList.toggle('on', i === activeIdx); });
+  if(reduceMotion) return;
+  els.forEach(function(el, i){
+    var r = el.getBoundingClientRect();
+    var dx = before[i].l - r.left;
+    var dy = before[i].t - r.top;
+    /* 尺寸补偿：布局尺寸变了的那两项会瞬间跳一下，用缩放把视觉尺寸先补回旧值 */
+    var sw = r.width ? before[i].w / r.width : 1;
+    var sh = r.height ? before[i].h / r.height : 1;
+    if(Math.abs(dx) < .5 && Math.abs(dy) < .5 && Math.abs(sw-1) < .002 && Math.abs(sh-1) < .002) return;
+    el.style.transformOrigin = 'left center';
+    /* 用 WAAPI 而不是 CSS transition：
+       ① 不写内联 transform —— 动画结束（fill:'none'）元素自然落在新布局位，没有残留偏移，
+          连点也不会累积漂移；
+       ② transition 在无头 / 被遮挡的环境里可能整段不推进，WAAPI 走合成器更可靠、也可逐帧验收。 */
+    el.animate([
+      { transform:'translate('+dx.toFixed(2)+'px,'+dy.toFixed(2)+'px) scale('+sw.toFixed(4)+','+sh.toFixed(4)+')' },
+      { transform:'translate(0,0) scale(1,1)' }
+    ], { duration:340, easing:'cubic-bezier(.22,1,.36,1)', fill:'none' });
+  });
+}
+/* 让位结束后无需清理：WAAPI 用 fill:'none'，动画一结束元素就自然落在新布局位，
+   不写内联 transform 也就不会残留偏移（连点也不会累积漂移）。 */
+
+/* ================= 动效：滚动容器里把形变目标居中 ================= */
+function centerInScroller(scroller, el, offset){
+  if(!scroller || !el) return;
+  var top = el.offsetTop - (offset || 0);
+  scroller.scrollTop = Math.max(0, top);
+}
+
+/* ================= 统一的「开弹层」入口 =================
+   所有弹层都从这里开：显示遮罩 + 从被点的按钮/行形变展开。
+   集中一处，避免每个 open*() 各写一遍（也保证漏掉的那个不会退化成底部滑入）。
+   ⚠️ 必须先把遮罩显示出来、量到面板的真实几何，再播放形变 ——
+   面板在 display:none 的容器里量出来是 0×0，morphOpen 会直接放弃（退化成无动画）。 */
+function openSheetMorph(srcEl){
+  var mask = $('mask');
+  var sheet = $('sheet');
+  sheet.classList.remove('morphing');
+  mask.classList.add('show');
+  /* 读一次布局，确保 show 之后的尺寸已经算出来 */
+  void sheet.offsetHeight;
+  morphOpen(sheet, srcEl || window.__morphSrc);
+}
 
 /* ================= 状态 ================= */
 var S = {
@@ -1165,7 +1369,6 @@ function renderHome(){
     +   '<div class="who"><div class="k2">你好，</div><div class="n2">我的账本</div></div>'
     +   '<button class="bell'+(pendN?' alert':'')+'" id="btnBell">'+ICO.bell+'<i></i></button>'
     + '</div>';
-
   var stack = '<div class="stack" id="stack">'
     + cards.map(cardHtml).join('')
     + '</div>'
@@ -1177,14 +1380,14 @@ function renderHome(){
   if(recs.length){
     recent = '<div class="list-card" id="homeList">'+recs.map(txRow).join('')+'</div>';
   } else {
-    recent = '<div class="card empty"><img src="./stickers/goku-1.png" alt=""><div class="t">还没有记录</div>'
+    recent = '<div class="card empty"><img src="./stickers/px-happy.png" alt=""><div class="t">还没有记录</div>'
       + '<div class="s">点下面中间的 ＋ 记第一笔</div></div>';
   }
 
   /* 本月小结：把原来那四个圆钮的位置换成一张带贴纸的卡（功能没丢，只是不再重复） */
   var thisM = monthMetrics(ym);
   var sumCard = '<div class="mcard">'
-    + '<img class="dec" src="./stickers/manga-02.jpg" alt="">'
+    + '<img class="dec" src="./stickers/px-smile.png" alt="">'
     + '<div class="k">本月小结</div>'
     + '<div class="v">'+thisM.cnt+' 笔 · 日均 ¥'+num(thisM.ex/Math.max(1,Object.keys(monthDays(ym)).length))+'</div>'
     + '<div class="sub">'+(S.budget>0
@@ -1250,95 +1453,240 @@ function renderList(){
 
   var head = '<div class="pg-head"><div class="row">'
     + '<div><div class="hk">'+y+' 年</div><h1>'+mo+' 月明细</h1></div>'
-    + '<div class="mnav"><button data-mv="-1" aria-label="上个月">‹</button>'
-    +   '<span class="ym">'+yrMoShort()+((y!==now.getFullYear())?(' '+y):'')+'</span>'
+    + '<div class="mnav">'
+    +   '<button data-mv="-1" aria-label="上个月">‹</button>'
+    +   '<button class="ym" id="calTrigger" aria-label="选日期">'+yrMoShort()+((y!==now.getFullYear())?(' '+y):'')+'</button>'
     +   '<button data-mv="1" aria-label="下个月">›</button></div>'
     + '</div></div>';
   function yrMoShort(){ return mo+'月'; }
 
-  // 日期条：整月 + 本月每一天（有记录的带点）
+  // 日期条：整月 + 本月每一天（有记录的带点）。
+  // 选中项会真实变宽（.sel），邻居靠 FLIP 平滑让位 —— 见 flipTagRow()
   var strip = '<div class="daystrip" id="dayStrip">'
-    + '<button class="dchip wide'+(listPick===''?' on':'')+'" data-day=""><span class="d1">整月</span><span class="d2">'+sum.cnt+' 笔</span></button>';
+    + '<button class="dchip wide'+(listPick===''?' on sel':'')+'" data-day=""><span class="d1">整月</span><span class="d2">'+sum.cnt+' 笔</span></button>';
   for(var d0=1; d0<=dayCount; d0++){
     var ds = listYm+'-'+pad(d0);
     var has = !!byDay[ds];
     var isToday = isCurMonth && d0===todayD;
-    strip += '<button class="dchip'+(has?' has':'')+(listPick===ds?' on':'')+'" data-day="'+ds+'">'
+    strip += '<button class="dchip'+(has?' has':'')+(listPick===ds?' on sel':'')+'" data-day="'+ds+'">'
       + '<span class="d1">'+d0+'</span>'
       + '<span class="d2">'+(isToday?'今天':weekCn(parseTs(ds)))+'</span>'
       + '<span class="d3"></span></button>';
   }
   strip += '</div>';
 
-  var body;
-  if(!all.length){
-    body = '<div class="card empty"><img src="./stickers/manga-03.jpg" style="width:150px;border-radius:26px;" alt="">'
-      + '<div class="t">'+(isCurMonth?'这个月还没有记录':'这天没有记录')+'</div>'
-      + '<div class="s">点底部中间的 ＋ 记一笔</div></div>';
-  } else {
-    var shown = listPick ? (byDay[listPick]||[]) : all;
-    // 本月最大单笔支出：用深色卡高亮（对应参考图里那张黑卡）
-    var maxRec = null;
-    shown.forEach(function(r){ if(r.type!=='income' && (!maxRec || r.amount>maxRec.amount)) maxRec=r; });
-
-    var groups=[], gmap={};
-    shown.forEach(function(r){
-      var d = ymdStr(r.ts);
-      if(!gmap[d]){ gmap[d]=[]; groups.push(d); }
-      gmap[d].push(r);
-    });
-    var html = '<div class="tl">';
-    groups.forEach(function(d, gi){
-      var g = gmap[d];
-      var dEx=0, dIn=0;
-      g.forEach(function(r){ if(r.type==='income') dIn+=r.amount; else dEx+=r.amount; });
-      var ts = parseTs(d);
-      html += '<div class="tl-day'+((isCurMonth&&d===ymdStr(Date.now()))?' on':'')+'">'
-        + '<span class="dd"></span>'
-        + '<span class="t1">'+esc(dayLabel(d, ts))+'</span>'
-        + '<span class="t2">'+esc(weekCn(ts))+'</span>'
-        + '<span class="sum">'+(dIn-dEx<0?'−':'')+'¥'+num(Math.abs(dIn-dEx))+'</span>'
-        + '</div>';
-      g.forEach(function(r){
-        var isIn = r.type==='income';
-        var dark = (maxRec && r.id===maxRec.id);
-        html += '<div class="tl-item'+(dark?' dark':'')+'" data-id="'+esc(r.id)+'">'
-          + '<span class="dot"></span>'
-          + '<div class="row">'
-          +   catCircle(r.category)
-          +   '<div class="rmid"><div class="r1">'+esc(r.category)+'</div>'
-          +     '<div class="r2">'+esc(hmStr(r.ts))+' · '+esc(r.note||r.account||'—')+(r.auto?' · 自动分类':'')+'</div></div>'
-          +   '<span class="ramt'+(isIn?' in':'')+'">'+(isIn?'+':'−')+num(r.amount)+'</span>'
-          + '</div>'
-          + '</div>';
-      });
-    });
-    html += '</div>';
-    html += '<div class="tl-total"><span class="l">'+(listPick?(dayLabel(listPick,parseTs(listPick))+' 合计'):'本月合计')+'</span>'
-      + '<span class="v">'
-      +   '<span style="font-size:12.5px;font-weight:600;color:var(--ink2);">支出 </span>¥'+num(shown.reduce(function(a,r){ return a+(r.type==='income'?0:r.amount); },0))
-      +   (shown.some(function(r){ return r.type==='income'; })
-            ? '<span style="font-size:12.5px;font-weight:600;color:var(--ink2);margin-left:10px;">收入 </span><span style="color:var(--green);">¥'+num(shown.reduce(function(a,r){ return a+(r.type==='income'?r.amount:0); },0))+'</span>'
-            : '')
-      + '</span></div>';
-    body = html;
-  }
-
-  $('page-list').innerHTML = head + strip + body;
+  $('page-list').innerHTML = head + strip + '<div id="listBodyWrap">' + listBodyHtml() + '</div>';
+  bindListBody();
   var st = $('dayStrip');
   if(st){
-    Array.prototype.forEach.call(st.querySelectorAll('.dchip'), function(el){
+    var chips = Array.prototype.slice.call(st.querySelectorAll('.dchip'));
+    /* 标签让位：先把所有 chip 的当前布局量下来，切 sel 触发真实重排，
+       再用 FLIP 让邻居平滑滑到新位置（不重建 DOM，避免整页重排闪烁） */
+    Array.prototype.forEach.call(chips, function(el, i){
       el.addEventListener('click', function(){
-        listPick = el.getAttribute('data-day')||'';
-        renderList();
+        var day = el.getAttribute('data-day')||'';
+        if(day === listPick) return;              /* 点已选中项：不动 */
+        listPick = day;
+        flipTagRow(st, chips, i);
+        renderListBodyOnly();
       });
     });
   }
   Array.prototype.forEach.call(document.querySelectorAll('#page-list [data-mv]'), function(el){
     el.addEventListener('click', function(){ shiftMonth(Number(el.getAttribute('data-mv'))); });
   });
+  var ct = $('calTrigger');
+  if(ct) ct.addEventListener('click', function(){ openCalendar(ct); });
+}
+
+/* 只重渲染时间轴部分（日期条保留，才能做让位动画） */
+function renderListBodyOnly(){
+  var w = $('listBodyWrap');
+  if(!w) return;
+  w.innerHTML = listBodyHtml();
+  bindListBody();
+}
+function bindListBody(){
   Array.prototype.forEach.call(document.querySelectorAll('#page-list .tl-item'), function(el){
     el.addEventListener('click', function(){ openSheet(el.getAttribute('data-id')); });
+  });
+}
+/* 时间轴主体：按当前 listYm / listPick 生成 */
+function listBodyHtml(){
+  var now = new Date();
+  var isCurMonth = listYm === (now.getFullYear()+'-'+pad(now.getMonth()+1));
+  var all = monthRecs(listYm);
+  var byDay = {};
+  all.forEach(function(r){ var d=ymdStr(r.ts); (byDay[d]=byDay[d]||[]).push(r); });
+
+  if(!all.length){
+    return '<div class="card empty"><img src="./stickers/px-trunks.png" style="width:120px;" alt="">'
+      + '<div class="t">'+(isCurMonth?'这个月还没有记录':'这天没有记录')+'</div>'
+      + '<div class="s">点底部中间的 ＋ 记一笔</div></div>';
+  }
+  var shown = listPick ? (byDay[listPick]||[]) : all;
+  if(!shown.length){
+    return '<div class="card empty"><img src="./stickers/px-smile.png" style="width:132px;" alt="">'
+      + '<div class="t">'+esc(dayLabel(listPick, parseTs(listPick)))+' 没有记录</div>'
+      + '<div class="s">点「整月」看全月</div></div>';
+  }
+  // 本月最大单笔支出：用深色卡高亮（对应参考图里那张黑卡）
+  var maxRec = null;
+  shown.forEach(function(r){ if(r.type!=='income' && (!maxRec || r.amount>maxRec.amount)) maxRec=r; });
+
+  var groups=[], gmap={};
+  shown.forEach(function(r){
+    var d = ymdStr(r.ts);
+    if(!gmap[d]){ gmap[d]=[]; groups.push(d); }
+    gmap[d].push(r);
+  });
+  var html = '<div class="tl">';
+  groups.forEach(function(d){
+    var g = gmap[d];
+    var dEx=0, dIn=0;
+    g.forEach(function(r){ if(r.type==='income') dIn+=r.amount; else dEx+=r.amount; });
+    var ts = parseTs(d);
+    html += '<div class="tl-day'+((isCurMonth&&d===ymdStr(Date.now()))?' on':'')+'">'
+      + '<span class="dd"></span>'
+      + '<span class="t1">'+esc(dayLabel(d, ts))+'</span>'
+      + '<span class="t2">'+esc(weekCn(ts))+'</span>'
+      + '<span class="sum">'+(dIn-dEx<0?'−':'')+'¥'+num(Math.abs(dIn-dEx))+'</span>'
+      + '</div>';
+    g.forEach(function(r){
+      var isIn = r.type==='income';
+      var dark = (maxRec && r.id===maxRec.id);
+      html += '<div class="tl-item'+(dark?' dark':'')+'" data-id="'+esc(r.id)+'">'
+        + '<span class="dot"></span>'
+        + '<div class="row">'
+        +   catCircle(r.category)
+        +   '<div class="rmid"><div class="r1">'+esc(r.category)+'</div>'
+        +     '<div class="r2">'+esc(hmStr(r.ts))+' · '+esc(r.note||r.account||'—')+(r.auto?' · 自动分类':'')+'</div></div>'
+        +   '<span class="ramt'+(isIn?' in':'')+'">'+(isIn?'+':'−')+num(r.amount)+'</span>'
+        + '</div>'
+        + '</div>';
+    });
+  });
+  html += '</div>';
+  var exSum = shown.reduce(function(a,r){ return a+(r.type==='income'?0:r.amount); },0);
+  var inSum = shown.reduce(function(a,r){ return a+(r.type==='income'?r.amount:0); },0);
+  html += '<div class="tl-total"><span class="l">'+(listPick?(dayLabel(listPick,parseTs(listPick))+' 合计'):'本月合计')+'</span>'
+    + '<span class="v">'
+    +   '<span style="font-size:12.5px;font-weight:600;color:var(--ink2);">支出 </span>¥'+num(exSum)
+    +   (inSum ? '<span style="font-size:12.5px;font-weight:600;color:var(--ink2);margin-left:10px;">收入 </span><span style="color:var(--green);">¥'+num(inSum)+'</span>' : '')
+    + '</span></div>';
+  return html;
+}
+
+/* ================= 日历（点月份按钮形变展开，可挑任意日期） ================= */
+var calYm = '';
+function openCalendar(srcEl){
+  var cal = $('cal');
+  if(!cal) return;
+  if(cal.classList.contains('show')){ closeCalendar(); return; }
+  calYm = listYm;
+  /* 先把日历放到触发按钮正下方（fixed 定位由 JS 算，避免被滚动容器裁切） */
+  var r = srcEl.getBoundingClientRect();
+  var width = Math.min(320, window.innerWidth - 32);
+  var left = Math.min(Math.max(12, r.left), window.innerWidth - width - 12);
+  cal.style.width = width + 'px';
+  cal.style.left = left + 'px';
+  cal.style.top = (r.bottom + 8) + 'px';
+  paintCalendar();
+  cal.classList.add('show');
+  morphOpen(cal, srcEl);
+  document.addEventListener('pointerdown', calOutside, true);
+}
+function calOutside(e){
+  var cal = $('cal');
+  if(!cal || !cal.classList.contains('show')) return;
+  if(cal.contains(e.target)) return;
+  var trig = $('calTrigger');
+  if(trig && trig.contains(e.target)) return;
+  closeCalendar();
+}
+function closeCalendar(){
+  var cal = $('cal');
+  if(!cal) return;
+  document.removeEventListener('pointerdown', calOutside, true);
+  morphClose(cal, window.__morphSrc);
+}
+function paintCalendar(){
+  var cal = $('cal');
+  var inner = $('calInner');
+  if(!cal || !inner) return;
+  var y = Number(calYm.slice(0,4)), mo = Number(calYm.slice(5,7));
+  var first = new Date(y, mo-1, 1);
+  var startWk = first.getDay();                 // 0=周日
+  var dayCount = new Date(y, mo, 0).getDate();
+  var byDay = {};
+  monthRecs(calYm).forEach(function(r){ byDay[ymdStr(r.ts)] = true; });
+  var today = ymdStr(Date.now());
+
+  var wk = ['日','一','二','三','四','五','六'].map(function(w){ return '<span>'+w+'</span>'; }).join('');
+  var cells = '';
+  for(var i=0;i<startWk;i++) cells += '<button class="empty" disabled></button>';
+  for(var d=1; d<=dayCount; d++){
+    var ds = calYm+'-'+pad(d);
+    var cls = 'cal-grid-cell';
+    if(ds === today) cls += ' today';
+    if(byDay[ds]) cls += ' has';
+    if(ds === listPick) cls += ' on';
+    cells += '<button class="'+cls+'" data-cal-day="'+ds+'"><span>'+d+'</span>'
+      + (byDay[ds] ? '<span class="cd"></span>' : '')
+      + '</button>';
+  }
+  inner.innerHTML = ''
+    + '<div class="cal-top">'
+    +   '<span class="cm">'+mo+' 月</span><span class="cy">'+y+'</span>'
+    +   '<span class="nav">'
+    +     '<button data-cal-mv="-1" aria-label="上个月">‹</button>'
+    +     '<button data-cal-mv="1" aria-label="下个月">›</button>'
+    +   '</span>'
+    + '</div>'
+    + '<div class="cal-wk">'+wk+'</div>'
+    + '<div class="cal-grid">'+cells+'</div>'
+    + '<div class="cal-foot">'
+    +   '<button id="calAll">看整月</button>'
+    +   '<button class="primary" id="calToday">今天</button>'
+    + '</div>';
+
+  Array.prototype.forEach.call(inner.querySelectorAll('[data-cal-day]'), function(b){
+    b.addEventListener('click', function(){
+      var ds = b.getAttribute('data-cal-day');
+      listPick = ds;
+      /* 跨月选择：把明细页也切到那个月 */
+      if(ds.slice(0,7) !== listYm) listYm = ds.slice(0,7);
+      closeCalendar();
+      renderList();
+      /* 让选中的那天在日期条里居中可见 */
+      setTimeout(function(){
+        var st = $('dayStrip');
+        if(!st) return;
+        var el = st.querySelector('.dchip[data-day="'+ds+'"]');
+        if(el) st.scrollLeft = Math.max(0, el.offsetLeft - st.clientWidth/2 + el.offsetWidth/2);
+      }, 60);
+    });
+  });
+  Array.prototype.forEach.call(inner.querySelectorAll('[data-cal-mv]'), function(b){
+    b.addEventListener('click', function(){
+      var d = Number(b.getAttribute('data-cal-mv'));
+      var yy = Number(calYm.slice(0,4)), mm = Number(calYm.slice(5,7)) + d;
+      if(mm<1){ mm=12; yy--; }
+      if(mm>12){ mm=1; yy++; }
+      calYm = yy+'-'+pad(mm);
+      paintCalendar();
+    });
+  });
+  $('calAll').addEventListener('click', function(){
+    listPick = '';
+    if(calYm !== listYm) listYm = calYm;
+    closeCalendar(); renderList();
+  });
+  $('calToday').addEventListener('click', function(){
+    var t = ymdStr(Date.now());
+    listPick = t; listYm = t.slice(0,7);
+    calYm = listYm;
+    closeCalendar(); renderList();
   });
 }
 
@@ -1593,7 +1941,7 @@ function renderMe(){
     + '</div>';
 
   var dark = '<div class="me-dark">'
-    + '<img src="./stickers/goku-black-side.png" alt="">'
+    + '<img src="./stickers/px-goku-black.png" alt="">'
     + '<div class="t">数据存在哪？</div>'
     + '<div class="s">'+esc(isCfgOk()
         ? ('本机浏览器 + 你的私有仓库 '+S.cfg.owner+'/'+S.cfg.repo+'。换手机时把用户名/仓库/Token 填一遍就能拉回全部记录。')
@@ -1603,11 +1951,11 @@ function renderMe(){
   /* 底部一张贴纸横幅：把用户给的漫画图用起来 */
   var banner = '<div class="me-banner">'
     + '<img src="./stickers/manga-wide-02.jpg" alt="">'
-    + '<div class="cap">懒人记账</div>'
+    + '<div class="cap">记账</div>'
     + '</div>';
 
   $('page-me').innerHTML = hero + '<div style="height:14px;"></div>' + rows1 + rows2 + dark + banner
-    + '<div class="foot">懒人记账 ' + VER + ' · 纯前端离线 PWA</div>';
+    + '<div class="foot">记账 ' + VER + ' · 纯前端离线 PWA</div>';
 }
 
 /* ================= 渲染入口 ================= */
@@ -1708,7 +2056,10 @@ function openSheet(id, presetType){
   $('mask').classList.add('show');
   bindSheet();
   paintSheetSel();
-  if(!id) setTimeout(function(){ var a=$('fAmt'); if(a) a.focus(); },220);
+  /* 形变展开：从被点的按钮/卡片长出来 */
+  morphOpen($('sheet'), window.__morphSrc, function(){
+    if(!id){ var a=$('fAmt'); if(a) a.focus(); }
+  });
 }
 function sheetHtml(amt, note, time, isEdit){
   return ''
@@ -1738,8 +2089,8 @@ function sheetHtml(amt, note, time, isEdit){
     +   '<button class="btn btn-dark" id="btnSave">'+(isEdit?'保存修改':'记这一笔')+'</button>'
     + '</div>'
     + (isEdit
-        ? '<div class="sheet-dec"><img src="./stickers/goku-angry.png" alt=""></div>'
-        : '<div class="sheet-dec"><img src="./stickers/manga-01.jpg" alt=""><span>iOS 快捷指令截屏记的账也会出现在这里</span></div>');
+        ? '<div class="sheet-dec"><img src="./stickers/px-angry.png" alt=""></div>'
+        : '<div class="sheet-dec"><img src="./stickers/px-tab2.png" alt=""><span>iOS 快捷指令截屏记的账也会出现在这里</span></div>');
 }
 function paintSheetSel(){
   var list = (curType==='income')?incomeCats():expenseCats();
@@ -1797,7 +2148,13 @@ function bindSheet(){
     paintSheetSel();
   };
 }
-function closeSheet(){ $('mask').classList.remove('show'); editingId=null; }
+function closeSheet(){
+  editingId=null;
+  /* 原路收回按钮，而不是滑出屏幕 */
+  morphClose($('sheet'), window.__morphSrc, function(){
+    $('mask').classList.remove('show');
+  });
+}
 function saveSheet(){
   var amt = Math.abs(Number($('fAmt').value));
   if(!amt){ toast('请输入金额'); return; }
@@ -1874,7 +2231,7 @@ function openMonth(){
     +   '</div>'
     + '</div>'
     + '<button class="btn btn-dark btn-full" id="mmClose" style="margin-top:14px;">知道了</button>';
-  $('mask').classList.add('show');
+  openSheetMorph();
   $('sheetX').onclick = closeSheet;
   $('mmClose').onclick = closeSheet;
 }
@@ -1907,7 +2264,7 @@ function openNotify(){
     + '</div>'
     + (isCfgOk() ? '' : '<button class="btn btn-dark btn-full" id="ntSync" style="margin-top:16px;">去配置 GitHub 同步</button>')
     + (isCfgOk() ? '<button class="btn btn-full" id="ntNow" style="margin-top:16px;">立即同步</button>' : '');
-  $('mask').classList.add('show');
+  openSheetMorph();
   $('sheetX').onclick = closeSheet;
   var a = $('ntSync'); if(a) a.onclick = function(){ openSync(); };
   var b = $('ntNow'); if(b) b.onclick = function(){ closeSheet(); sync(true); };
@@ -1930,7 +2287,7 @@ function openCats(){
     + inc.map(catItemHtml).join('')
     + '<button class="btn btn-dark btn-full" id="catNew" style="margin-top:14px;">+ 新增分类</button>'
     + '<button class="btn btn-full" id="catReset" style="margin-top:10px;font-size:14px;color:var(--ink2);">恢复内置词典</button>';
-  $('mask').classList.add('show');
+  openSheetMorph();
   $('sheetX').onclick = closeSheet;
   $('catNew').onclick = function(){ openCatEdit(null); };
   $('catReset').onclick = function(){
@@ -2109,7 +2466,7 @@ function openBudget(){
     +   '<input type="number" id="budAmt" inputmode="decimal" step="1" min="0" placeholder="3000" value="'+(Number(S.budget)||'')+'">'
     +   '<div class="hint">填 0 表示不启用预算。设好之后，统计页的表盘会变成「预算使用率」。</div></div>'
     + '<button class="btn btn-dark btn-full" id="budSave">保存</button>';
-  $('mask').classList.add('show');
+  openSheetMorph();
   $('sheetX').onclick = closeSheet;
   $('budSave').onclick = function(){
     S.budget = Math.max(0, Number($('budAmt').value)||0);
@@ -2169,7 +2526,7 @@ function openRecurring(){
     });
   }
   paint();
-  $('mask').classList.add('show');
+  openSheetMorph();
   $('sheetX').onclick = closeSheet;
 }
 function openSync(){
@@ -2199,7 +2556,7 @@ function openSync(){
     +   '状态：'+esc(isCfgOk() ? (S.lastSync?('已同步 '+new Date(S.lastSync).toLocaleString('zh-CN')):'已配置') : '未配置')+'<br>'
     +   '待上传：'+Object.keys(S.pending).length+' 条'
     + '</div>';
-  $('mask').classList.add('show');
+  openSheetMorph();
   $('sheetX').onclick = closeSheet;
   $('cfgAuto').onclick = function(){
     S.cfg.auto = !S.cfg.auto; persist();
@@ -2229,8 +2586,8 @@ function openAbout(){
   $('sheetTitle').textContent = '关于';
   $('sheetBody').innerHTML = ''
     + '<div class="card" style="padding:22px;text-align:center;margin-bottom:14px;">'
-    +   '<img src="./stickers/manga-05.jpg" style="width:118px;border-radius:26px;margin:0 auto 10px;" alt="">'
-    +   '<div style="font-size:20px;font-weight:800;">懒人记账</div>'
+    +   '<img src="./stickers/px-tab3.png" style="width:112px;margin:0 auto 10px;" alt="">'
+    +   '<div style="font-size:20px;font-weight:800;">记账</div>'
     +   '<div class="tiny muted" style="margin-top:4px;">'+VER+' · 纯前端离线 PWA</div>'
     + '</div>'
     + '<div class="card" style="padding:18px;">'
@@ -2242,13 +2599,13 @@ function openAbout(){
     +   '· 没有任何第三方服务器'
     +   '</div>'
     + '</div>';
-  $('mask').classList.add('show');
+  openSheetMorph();
   $('sheetX').onclick = closeSheet;
 }
 function shareApp(){
   var url = location.origin + location.pathname;
   if(navigator.share){
-    navigator.share({ title:'懒人记账', text:'iPhone 自动记账，数据存自己的 GitHub', url:url }).catch(function(){});
+    navigator.share({ title:'记账', text:'iPhone 自动记账，数据存自己的 GitHub', url:url }).catch(function(){});
   } else {
     copyText(url, '网址已复制');
   }
