@@ -122,20 +122,28 @@
   .bell.alert i{display:block;}
 
   /* ---------- 首页：深色账户卡（叠卡） ---------- */
-  .stack{position:relative; height:214px; margin:2px 2px 0;}
+  .stack{position:relative; height:214px; margin:2px 2px 0; touch-action:pan-y;}
   .ccard{
     position:absolute; left:0; right:0; height:186px; border-radius:var(--r-lg);
     background:var(--dark); color:#fff; overflow:hidden;
     box-shadow:var(--sh-dark);
-    transition:transform .42s cubic-bezier(.22,.9,.24,1), opacity .42s ease;
+    /* ⚠️ 不要在这里写 transform 过渡：拖拽时每帧由 JS 写 transform，
+       会和过渡打架（拖起来会拖泥带水）。吸附动画走 WAAPI。 */
     will-change:transform;
   }
+  /* 拖拽中禁止选中/长按呼出，避免和手势抢事件 */
+  .stack.dragging{ cursor:grabbing; }
+  .stack.dragging .ccard{ transition:none; }
   .ccard .waves{position:absolute; inset:0; background-repeat:no-repeat; background-size:cover; opacity:.9; pointer-events:none;}
   .ccard .face{position:absolute; inset:0; background-size:cover; background-position:50% 22%; opacity:.30; mix-blend-mode:screen; pointer-events:none;}
   .ccard .veil{position:absolute; inset:0; background:linear-gradient(160deg, rgba(26,28,32,.62), rgba(16,18,22,.92) 62%); pointer-events:none;}
+  /* 三张卡的位置不再只靠 class：拖拽时 JS 会在 pos0/pos1/pos2 之间**插值**，
+     所以这里给出的只是每个槽位的「基准变换」，由 JS 读取后做连续过渡。 */
   .ccard.pos0{transform:translateY(0) scale(1); z-index:3;}
   .ccard.pos1{transform:translateY(-13px) scale(.962) rotate(-2.1deg); z-index:2; opacity:.62;}
   .ccard.pos2{transform:translateY(-26px) scale(.925) rotate(-4.2deg); z-index:1; opacity:.34;}
+  /* 拖拽插值用：JS 把算出来的 transform 写到内联样式上，优先于上面的 class 规则 */
+  .ccard.manual{transform:none !important;}
   .ccard .cidx{
     position:absolute; inset:0; padding:20px 22px 18px; display:flex; flex-direction:column; z-index:2;
   }
@@ -276,11 +284,29 @@
   .tl-day .sum{margin-left:auto; font-size:12.5px; font-weight:700; color:var(--ink2); font-variant-numeric:tabular-nums;}
   .tl-item{position:relative; margin-bottom:9px;}
   .tl-item .dot{position:absolute; left:-25.5px; top:26px; width:13px; height:13px; border-radius:50%; background:var(--card); border:2.5px solid #D8D6D0;}
+  /* 左滑删除：.row 是可滑动的那一层，下面垫一块删除底（红底 + 垃圾桶）。
+     ⚠️ 滑动中 transform 由 JS 每帧写，所以这里不能有 transform 过渡。 */
+  .tl-item{overflow:hidden; border-radius:var(--r-md);}
   .tl-item .row{
+    position:relative; z-index:2;
     display:flex; align-items:center; gap:11px; background:var(--card); border-radius:var(--r-md);
-    padding:12px 14px; box-shadow:var(--sh); cursor:pointer; transition:transform .16s ease;
+    padding:12px 14px; box-shadow:var(--sh); cursor:pointer;
   }
-  .tl-item .row:active{transform:scale(.985);}
+  /* 垫在 .row 下面的删除区（默认被 row 完全盖住） */
+  .tl-item .delbg{
+    position:absolute; inset:0; z-index:1; border-radius:var(--r-md);
+    background:linear-gradient(90deg, rgba(255,92,99,0), var(--red) 34%);
+    display:flex; align-items:center; justify-content:flex-end;
+    padding-right:20px; gap:8px; color:#fff; font-size:14px; font-weight:800;
+    pointer-events:none;
+  }
+  .tl-item .delbg svg{width:20px; height:20px;}
+  .tl-item.armed .delbg{color:#fff;}
+  .tl-item.armed .delbg span{transform:scale(1.06);}
+  .tl-item .delbg span{transition:transform .16s ease;}
+  /* 飞出去之后先藏住，等动画结束再真正删 DOM */
+  .tl-item.gone{visibility:hidden;}
+  .tl-item.dragging, .tl-item.dragging .row{cursor:grabbing;}
   .tl-item.dark .row{background:var(--dark); color:#fff; box-shadow:var(--sh2);}
   .tl-item.dark .dot{border-color:var(--ink); background:var(--ink);}
   .tl-item.dark .r2{color:rgba(255,255,255,.6);}
@@ -296,8 +322,10 @@
 
   /* ---------- 统计：分段控件 ---------- */
   .seg{position:relative; display:flex; background:#E7E5E0; border-radius:999px; padding:4px; margin:0 0 20px;}
-  .seg .pill{position:absolute; top:4px; bottom:4px; left:4px; width:calc(50% - 4px); background:var(--dark); border-radius:999px; box-shadow:0 6px 16px rgba(12,14,18,.28); transition:transform .3s cubic-bezier(.32,.72,0,1);}
-  .seg.r .pill{transform:translateX(100%);}
+  /* 液态 Tab：指示器不再靠 translateX 整块平移，而由 JS 用两根弹簧分别驱动
+     左右边缘（见 liquidTab()）。这里只给出外观，位置/宽度一律内联。 */
+  .seg .pill{position:absolute; top:4px; bottom:4px; left:0; width:0; background:var(--dark); border-radius:999px; box-shadow:0 6px 16px rgba(12,14,18,.28); will-change:transform,width;}
+  /* 位置由 JS 弹簧驱动，这里不能再写 transform（会覆盖内联值） */
   .seg button{position:relative; z-index:2; flex:1; padding:11px 0; font-size:14.5px; font-weight:700; color:var(--ink2); display:flex; align-items:center; justify-content:center; gap:7px; transition:color .25s;}
   .seg button svg{width:17px; height:17px;}
   .seg button.on{color:#fff;}
@@ -443,8 +471,9 @@
 
   /* ---------- 记一笔 ---------- */
   .type-seg{position:relative; display:flex; background:#E7E5E0; border-radius:999px; padding:4px; margin-bottom:16px;}
-  .type-seg .pill{position:absolute; top:4px; bottom:4px; left:4px; width:calc(50% - 4px); background:var(--dark); border-radius:999px; transition:transform .3s cubic-bezier(.32,.72,0,1);}
-  .type-seg.in .pill{transform:translateX(100%); background:#12805F;}
+  .type-seg .pill{position:absolute; top:4px; bottom:4px; left:0; width:0; background:var(--dark); border-radius:999px; will-change:transform,width;}
+  /* 收入态只换颜色，位置/宽度由 JS 弹簧决定 */
+  .type-seg.in .pill{background:#12805F;}
   .type-seg button{position:relative; z-index:2; flex:1; padding:11px 0; font-size:14.5px; font-weight:700; color:var(--ink2); transition:color .25s;}
   .type-seg button.on{color:#fff;}
   .amt-box{background:var(--card); border-radius:var(--r-lg); box-shadow:var(--sh); padding:18px; margin-bottom:14px; text-align:center;}
@@ -459,8 +488,20 @@
   .fld{background:var(--card); border-radius:var(--r-lg); box-shadow:var(--sh); padding:16px; margin-bottom:14px;}
   .fld > .lb{display:block; font-size:12.5px; font-weight:700; color:var(--ink2); margin-bottom:11px;}
   .fld input[type=text],.fld input[type=number],.fld input[type=password],.fld input[type=datetime-local]{
-    width:100%; border:none; outline:none; background:#F6F5F2; border-radius:14px; padding:13px 14px; font-size:15.5px;
+    width:100%; min-width:0; max-width:100%; box-sizing:border-box;
+    border:none; outline:none; background:#F6F5F2; border-radius:14px; padding:13px 14px;
+    /* ⚠️ 必须 ≥16px：iOS 上 focus 一个字号 <16px 的输入框会自动放大整个页面，
+       放大后输入框看起来"突出来"了（经典 iOS 坑）。 */
+    font-size:16px;
   }
+  /* ⚠️ 原生日期时间控件（iOS 版）有自己的内在宽度和内边距，会顶破圆角底。
+     去掉原生外观 + 显式锁死宽度，让它老老实实待在框里。 */
+  .fld input[type=datetime-local]{
+    -webkit-appearance:none; appearance:none;
+    display:block; text-align:left; height:auto;
+  }
+  .fld input[type=datetime-local]::-webkit-date-and-time-value{text-align:left; margin:0;}
+  .fld input[type=datetime-local]::-webkit-calendar-picker-indicator{margin:0; padding:0; opacity:.55;}
   .fld input::placeholder{color:var(--ink3); font-weight:600;}
   .hint{font-size:12px; font-weight:600; color:var(--ink2); margin-top:9px; line-height:1.6;}
   .hint b{font-weight:800; color:var(--ink);}
@@ -681,6 +722,39 @@ var morphAnim = null;
 var reduceMotion = false;
 try{ reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }catch(e){}
 
+/* ================= 动效地基：弹簧 + 全局 rAF 调度 ================= */
+var clamp = function(v,a,b){ return Math.min(b, Math.max(a,v)); };
+/* 半隐式欧拉弹簧：k 刚度，d 阻尼（d 小 = 回弹明显） */
+function makeSpring(x, k, d){ return { x:(x||0), v:0, t:(x||0), k:k||170, d:d||16 }; }
+function stepSpring(s, dt){
+  s.v += (s.t - s.x) * s.k * dt;
+  s.v *= Math.exp(-s.d * dt);
+  s.x += s.v * dt;
+}
+var _updaters = [], _lastT = 0;
+function addUpdater(stage, fn){
+  var u = { fn:fn, active:true };
+  try{
+    if(window.IntersectionObserver && stage){
+      new IntersectionObserver(function(es){ u.active = es[es.length-1].isIntersecting; },
+        { rootMargin:'120px' }).observe(stage);
+    }
+  }catch(e){}
+  _updaters.push(u);
+  return u;
+}
+(function loop(t){
+  if(!_lastT) _lastT = t;
+  var dt = clamp((t - _lastT)/1000, 0.001, 0.033);   /* 钳制 dt：防止切后台回来暴走 */
+  _lastT = t;
+  for(var i=0;i<_updaters.length;i++){
+    var u = _updaters[i];
+    if(u.active && u.fn) u.fn(dt);
+  }
+  requestAnimationFrame(loop);
+})(0);
+function stopUpdaters(){ _updaters.length = 0; }
+
 /* 记下最近被点的按钮（事件委托里拿不到「哪个按钮被点」，捕获阶段记下来） */
 document.addEventListener('pointerdown', function(e){
   var t = e.target && e.target.closest ? e.target.closest('button,[data-morph]') : null;
@@ -804,6 +878,70 @@ function centerInScroller(scroller, el, offset){
   if(!scroller || !el) return;
   var top = el.offsetTop - (offset || 0);
   scroller.scrollTop = Math.max(0, top);
+}
+
+/* ================= 动效：液态 Tab 指示器（左右边缘双弹簧） =================
+   不是"整块平移"，而是**左右两条边各跑一根弹簧**：右边缘略快于左边缘，
+   跨项切换时宽度先被拉开、再收拢 —— 这个节奏差就是「液态」的拉伸感。
+   弹簧保留当前 x/v，所以快速跨项点击会从当前形态自然接续，不会跳。 */
+function liquidTab(track, pillSel, btnSel, activeIdx){
+  if(!track) return null;
+  var pill = track.querySelector(pillSel);
+  var btns = track.querySelectorAll(btnSel);
+  if(!pill || !btns.length) return null;
+
+  var L = makeSpring(0, 170, 15);   /* 左边缘 */
+  var R = makeSpring(0, 230, 16);   /* 右边缘更快 → 拉伸感 */
+  var first = true, alive = true;
+
+  function measure(){
+    var b = btns[clamp(activeIdx,0,btns.length-1)];
+    if(!b) return null;
+    var tl = b.offsetLeft;
+    var tr = tl + b.offsetWidth;
+    return { l:tl, r:tr };
+  }
+  function apply(){
+    /* translateX(min) + width = |R-L|：两根弹簧各自跑，宽度就是它们的差 */
+    var l = Math.min(L.x, R.x), r = Math.max(L.x, R.x);
+    pill.style.transform = 'translate3d(' + l.toFixed(2) + 'px,0,0)';
+    pill.style.width = Math.max(0, r - l).toFixed(2) + 'px';
+  }
+  function sync(){
+    var m = measure();
+    if(!m) return;
+    L.x = L.t = m.l; L.v = 0;
+    R.x = R.t = m.r; R.v = 0;
+    apply();
+  }
+  function set(i){
+    activeIdx = i;
+    var m = measure();
+    if(!m) return;
+    L.t = m.l;
+    R.t = m.r;
+    if(first){ L.x = L.t; R.x = R.t; first = false; }
+    if(reduceMotion){ L.x = L.t; L.v = 0; R.x = R.t; R.v = 0; }
+    apply();
+  }
+  /* 初始必须同步写一次，否则首帧前指示器叠在左上角 */
+  sync();
+  var u = addUpdater(track, function(dt){
+    if(!alive) return;
+    var moving = Math.abs(L.v) > 0.02 || Math.abs(R.v) > 0.02 ||
+                 Math.abs(L.t-L.x) > 0.02 || Math.abs(R.t-R.x) > 0.02;
+    if(!moving) return;
+    stepSpring(L, dt);
+    stepSpring(R, dt);
+    apply();
+  });
+  return {
+    set: set,
+    sync: sync,
+    /* 容器尺寸/字体变化后必须重新量：tab 宽度会变 */
+    remeasure: function(){ sync(); },
+    dispose: function(){ alive = false; if(u) u.active = false; }
+  };
 }
 
 /* ================= 统一的「开弹层」入口 =================
@@ -1296,7 +1434,8 @@ var ICO = {
   gift:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 10.5h15V20h-15z"/><path d="M3.5 7.4h17v3.1h-17zM12 7.4V20"/><path d="M12 7.4S10.8 3.5 8.6 3.5a2.2 2.2 0 0 0 0 3.9zM12 7.4s1.2-3.9 3.4-3.9a2.2 2.2 0 0 1 0 3.9z"/></svg>',
   calc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.4" width="14" height="17.2" rx="3"/><path d="M8.6 7.6h6.8M8.6 12h.01M12 12h.01M15.4 12h.01M8.6 16h.01M12 16h.01M15.4 16h.01"/></svg>',
   cal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.6" y="5" width="16.8" height="15.4" rx="3"/><path d="M3.6 9.6h16.8M8.4 3.4v3.2M15.6 3.4v3.2"/></svg>',
-  out:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6v11M7.6 10.2 12 14.6l4.4-4.4"/><path d="M4.6 16.4v1.8a2.2 2.2 0 0 0 2.2 2.2h10.4a2.2 2.2 0 0 0 2.2-2.2v-1.8"/></svg>'
+  out:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6v11M7.6 10.2 12 14.6l4.4-4.4"/><path d="M4.6 16.4v1.8a2.2 2.2 0 0 0 2.2 2.2h10.4a2.2 2.2 0 0 0 2.2-2.2v-1.8"/></svg>',
+  trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7h15M9.5 7V4.8h5V7M6.5 7l.9 12.2a1.6 1.6 0 0 0 1.6 1.5h6a1.6 1.6 0 0 0 1.6-1.5L17.5 7"/><path d="M10.3 11v6M13.7 11v6"/></svg>'
 };
 
 /* ================= 首页 ================= */
@@ -1360,10 +1499,11 @@ function renderHome(){
   var recs = recentRecs(6);
   var pendN = Object.keys(S.pending).length;
 
+  /* 三张卡：支出（微信支付）/ 收入（支付宝）/ 结余 */
   var cards = [
     { k:'本月支出', v:m.ex,  sub:'共 '+m.cnt+' 笔', acc:'微信支付 · 主账户', tag:S.budget>0 ? (m.ex<=S.budget?'预算内':'已超预算') : '本月' },
-    { k:'本月收入', v:m.inc, sub:'本月累计进账',   acc:'全部账户',        tag:'收入' },
-    { k:'本月结余', v:m.bal, sub:'收入 − 支出',    acc:'全部账户',        tag:'结余' }
+    { k:'本月收入', v:m.inc, sub:'本月累计进账',   acc:'支付宝 · 收款',    tag:'收入' },
+    { k:'本月结余', v:m.bal, sub:'收入 − 支出',    acc:'支付宝 · 主账户',  tag:'结余' }
   ];
   function cardHtml(c, idx){
     var pos = (idx - cardIdx + 3) % 3;
@@ -1419,25 +1559,175 @@ function renderHome(){
     + '<div class="sec"><span class="t">最近记录</span><button class="more" data-act="go-list">全部 '+ICO.arw+'</button></div>'
     + recent + sumCard;
 
-  // 叠卡：点一下换下一张（参考图里的卡片堆叠）
+  // 叠卡：手指左右拖动 → 卡片跟手翻滚；松手按方向+力度吸附到最近一档。
+  // 点按仍然保留（点侧卡翻页、点最前那张看本月概览），靠位移阈值区分点按与拖动。
   var st = $('stack');
-  if(st){
-    st.addEventListener('click', function(e){
-      var card = e.target.closest('.ccard');
-      if(!card) return;
-      var pos = card.className.indexOf('pos0')>=0 ? 0 : (card.className.indexOf('pos1')>=0 ? 1 : 2);
-      if(pos!==0){ cardIdx = (cardIdx + pos) % 3; renderHome(); return; }
-      openMonth();
-    });
-  }
+  if(st) bindCardStack(st);
+
   Array.prototype.forEach.call(document.querySelectorAll('#homeList .tx'), function(el){
     el.addEventListener('click', function(){ openSheet(el.getAttribute('data-id')); });
   });
   var b = $('btnBell');
   if(b) b.addEventListener('click', openNotify);
 }
-function relTime(r){
-  if(!r.ts) return r.time||'时间未知';
+/* ================= 动效：卡片堆叠手势（跟手翻滚 + 吸附） =================
+   手指横向拖动时三张卡按拖动进度**连续插值**（拖多少翻多少），松手再吸附到最近的整档；
+   堆叠形态不变 —— 始终是同一个 pos0/pos1/pos2 三层结构，只是进度 t 在 0..1 之间跑。
+   判定同时看距离与速度：只看距离会漏掉「快速轻扫」（位移小但速度大），
+   只看速度又会被慢速抖动误触。纵向意图交还给页面滚动，不然首页上下滑会被卡片抢走。 */
+var _cardDrag = null;
+function bindCardStack(st){
+  var startX = 0, startY = 0, dragging = false, decided = false, dx = 0, lastX = 0, vx = 0, t0 = 0;
+  var CARDS = 3;
+  var SNAP = 340;   /* 吸附动画时长 */
+
+  function cards(){ return Array.prototype.slice.call(st.querySelectorAll('.ccard')); }
+  /* 只有一个槽位的基准几何（从 CSS 里读出来，避免把数字抄第二遍） */
+  function slots(){
+    return [
+      { y:0,   s:1,    r:0,    o:1   },   /* pos0 */
+      { y:-13, s:0.962,r:-2.1, o:0.62 },  /* pos1 */
+      { y:-26, s:0.925,r:-4.2, o:0.34 }   /* pos2 */
+    ];
+  }
+  /* 把进度 t 映射成每张卡的 transform：t 从 0 走到 1 表示「翻一张」 */
+  function paint(t){
+    var S = slots();
+    var list = cards();
+    list.forEach(function(el, i){
+      var pos = (i - cardIdx + CARDS) % CARDS;      /* 当前槽位 0/1/2 */
+      var p = pos - t;                              /* 连续位置：pos0 拖到 -1 表示退了一档 */
+      /* 把 p 折算回 0..2 的一圈之内，取最近的那一段 */
+      if(p > 1.5) p -= CARDS;
+      if(p < -1.5) p += CARDS;
+      var a, b, f;
+      if(p >= 0){ a = S[Math.min(2, Math.floor(p))]; b = S[Math.min(2, Math.ceil(p))]; f = p - Math.floor(p); }
+      else { a = S[0]; b = S[0]; f = 0; }
+      var y = a.y + (b.y - a.y) * f;
+      var s = a.s + (b.s - a.s) * f;
+      var r = a.r + (b.r - a.r) * f;
+      var o = a.o + (b.o - a.o) * f;
+      el.classList.add('manual');
+      el.style.transform = 'translate3d(' + (p * -8).toFixed(2) + 'px,' + y.toFixed(2) + 'px,0)'
+                         + ' scale(' + s.toFixed(4) + ') rotate(' + r.toFixed(3) + 'deg)';
+      el.style.opacity = o.toFixed(3);
+    });
+  }
+  function releaseManual(){
+    cards().forEach(function(el){ el.classList.remove('manual'); el.style.transform = ''; el.style.opacity = ''; });
+  }
+  /* 用 WAAPI 做吸附：fill:'none' → 结束后自然落回 class 定义的槽位，不留内联样式 */
+  function snapTo(step){
+    var list = cards();
+    if(reduceMotion || !list.length){
+      cardIdx = (cardIdx + step + CARDS) % CARDS;
+      renderHome();
+      return;
+    }
+    /* 先把当前插值状态冻结下来，再动画到目标槽位 */
+    var from = list.map(function(el){
+      var m = el.style.transform || '';
+      return { el:el, tf:m, op:el.style.opacity || '' };
+    });
+    cardIdx = (cardIdx + step + CARDS) % CARDS;
+    /* 目标几何：让 CSS class 生效后再量（临时去掉 manual） */
+    from.forEach(function(f){ f.el.classList.remove('manual'); f.el.style.transform = ''; f.el.style.opacity = ''; });
+    list.forEach(function(el, i){
+      var pos = (i - cardIdx + CARDS) % CARDS;
+      el.className = 'ccard pos' + pos;
+      void el.offsetWidth;
+    });
+    var to = list.map(function(el){
+      var cs = getComputedStyle(el);
+      return { tf:cs.transform, op:cs.opacity };
+    });
+    list.forEach(function(el, i){
+      var startTf = from[i].tf || 'none';
+      el.animate([
+        { transform:startTf, opacity:(from[i].op || 1) },
+        { transform:(to[i].tf === 'none' ? 'none' : to[i].tf), opacity:to[i].op }
+      ], { duration:SNAP, easing:'cubic-bezier(.22,.9,.24,1)', fill:'none' });
+    });
+    /* 指示点 */
+    var dots = document.querySelectorAll('#stackDots i');
+    Array.prototype.forEach.call(dots, function(d, i){ d.classList.toggle('on', i === cardIdx); });
+  }
+  function openOverview(){
+    /* 点最前面那张 = 看本月概览（沿用形变展开） */
+    openMonth();
+  }
+
+  st.addEventListener('pointerdown', function(e){
+    if(e.button !== undefined && e.button > 0) return;
+    /* 事件可能落在卡片上，也可能落在 stack 空白区：两者都受理，
+       但只有从卡片上开始的拖动才算（否则会跟页面滚动抢） */
+    var card = (e.target.closest ? e.target.closest('.ccard') : null) || st.querySelector('.ccard.pos0');
+    if(!card) return;
+    startX = lastX = e.clientX;
+    startY = e.clientY;
+    dragging = true; decided = false; dx = 0; vx = 0; t0 = Date.now();
+    window.__cardTapTarget = card;
+    /* ⚠️ move/up 一律挂在 document 上：拖动中一旦 setPointerCapture 到卡片，
+       或者手指滑出 stack 范围，element 上的监听就收不到 up 了（手势会卡住）。 */
+    document.addEventListener('pointermove', onMove, { passive:false });
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
+  });
+  function onMove(e){
+    if(!dragging) return;
+    var mx = e.clientX - startX, my = e.clientY - startY;
+    if(!decided){
+      /* 位移超过 7px 才判定意图，避免点按被误判成滑动 */
+      if(Math.abs(mx) < 7 && Math.abs(my) < 7) return;
+      /* 纵向意图 → 交还页面滚动，不拦截 */
+      if(Math.abs(my) > Math.abs(mx)){ detach(); dragging = false; window.__cardTapTarget = null; return; }
+      decided = true;
+      st.classList.add('dragging');
+    }
+    var now = Date.now();
+    var dt = Math.max(1, now - t0);
+    vx = (e.clientX - lastX) / dt;      /* px/ms，用于轻扫判定 */
+    lastX = e.clientX; t0 = now;
+    dx = mx;
+    /* 跟手：拖一张卡宽的距离 = 翻一格 */
+    var w = st.getBoundingClientRect().width || 1;
+    var t = clamp(dx / w, -1, 1);
+    paint(t);
+  }
+  function detach(){
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup', onUp);
+    document.removeEventListener('pointercancel', onUp);
+  }
+  function onUp(e){
+    detach();
+    if(!dragging) return;
+    var wasDecided = decided;
+    dragging = false; decided = false;
+    st.classList.remove('dragging');
+    if(!wasDecided) return;                    /* 只是点按，交给 click 处理 */
+    var w = st.getBoundingClientRect().width || 1;
+    var t = dx / w;
+    var fling = Math.abs(vx) > 0.45;           /* 快速轻扫：位移小也算翻 */
+    var step = 0;
+    if(t <= -0.28 || (fling && vx < 0)) step = 1;      /* 向左 → 下一张 */
+    else if(t >= 0.28 || (fling && vx > 0)) step = -1; /* 向右 → 上一张 */
+    snapTo(step);
+    /* 拖过就不算点按，别顺手弹出概览 */
+    window.__cardTapTarget = null;
+  }
+
+  st.addEventListener('click', function(e){
+    if(window.__cardTapTarget !== e.target.closest('.ccard')) return;
+    var card = e.target.closest ? e.target.closest('.ccard') : null;
+    if(!card) return;
+    var pos = card.className.indexOf('pos0') >= 0 ? 0 : (card.className.indexOf('pos1') >= 0 ? 1 : 2);
+    if(pos !== 0){ snapTo(pos); return; }      /* 点侧卡 = 翻到那张 */
+    openOverview();
+  });
+}
+
+function relTime(r){  if(!r.ts) return r.time||'时间未知';
   var d = ymdStr(r.ts), t = hmStr(r.ts);
   var today = ymdStr(Date.now());
   var yest = ymdStr(Date.now()-86400000);
@@ -1527,9 +1817,203 @@ function renderListBodyOnly(){
   bindListBody();
 }
 function bindListBody(){
-  Array.prototype.forEach.call(document.querySelectorAll('#page-list .tl-item'), function(el){
-    el.addEventListener('click', function(){ openSheet(el.getAttribute('data-id')); });
+  var items = document.querySelectorAll('#page-list .tl-item');
+  Array.prototype.forEach.call(items, function(el){
+    el.addEventListener('click', function(){
+      /* 拖动过就不算点按，别顺手打开编辑弹层 */
+      if(el.getAttribute('data-swiped') === '1'){ el.removeAttribute('data-swiped'); return; }
+      openSheet(el.getAttribute('data-id'));
+    });
+    bindSwipeDelete(el);
   });
+}
+/* ================= 动效：明细卡片左滑删除（弧线飞出 + 可撤销） =================
+   跟手横滑：左滑超过卡宽 35% 或快速轻扫 → 沿**二次贝塞尔弧线**飞向左下角，
+   同时收缩旋转；其余行在动画进行中就重排填补（不要等动画结束才跳）。
+   数据在**动画开始时**就移除，失败/撤销时按反向路径飞回。
+   注意：动画完成 ≠ 服务器成功 —— 这里明确区分「本地已删」与「云端已同步」。 */
+function bindSwipeDelete(el){
+  var row = el.querySelector('.row');
+  if(!row) return;
+  var id = el.getAttribute('data-id');
+  var startX = 0, startY = 0, dx = 0, lastX = 0, vx = 0, t0 = 0;
+  var dragging = false, decided = false, armed = false;
+
+  /* 垫一块删除底（红底 + 垃圾桶），由 row 盖住 */
+  if(!el.querySelector('.delbg')){
+    var bg = document.createElement('div');
+    bg.className = 'delbg';
+    bg.innerHTML = '<span>删除</span>' + ICO.trash;
+    el.insertBefore(bg, el.firstChild);
+  }
+  var delbg = el.querySelector('.delbg');
+
+  function reset(animate){
+    if(animate && row.getAnimations && row.getAnimations().length === 0){
+      /* 未达阈值 → 弹回原位 */
+      var a = row.animate([{ transform:row.style.transform || 'none' }, { transform:'translate3d(0,0,0)' }],
+        { duration:260, easing:'cubic-bezier(.22,1,.36,1)', fill:'none' });
+      a.finished.then(function(){ row.style.transform = ''; });
+    } else if(!animate){
+      row.style.transform = '';
+    }
+    el.classList.remove('armed');
+    armed = false;
+  }
+
+  el.addEventListener('pointerdown', function(e){
+    if(e.button !== undefined && e.button > 0) return;
+    startX = lastX = e.clientX;
+    startY = e.clientY;
+    dx = 0; vx = 0; t0 = Date.now();
+    dragging = true; decided = false; armed = false;
+    /* 同卡片堆叠：move/up 挂 document，避免手指滑出元素后手势卡死 */
+    document.addEventListener('pointermove', onMove, { passive:false });
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
+  });
+  function detach(){
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup', onUp);
+    document.removeEventListener('pointercancel', onUp);
+  }
+  function onMove(e){
+    if(!dragging) return;
+    var mx = e.clientX - startX, my = e.clientY - startY;
+    if(!decided){
+      if(Math.abs(mx) < 7 && Math.abs(my) < 7) return;
+      /* 纵向意图 → 交还页面滚动 */
+      if(Math.abs(my) > Math.abs(mx)){ detach(); dragging = false; return; }
+      decided = true;
+      el.classList.add('dragging');
+    }
+    var now = Date.now();
+    var dt = Math.max(1, now - t0);
+    vx = (e.clientX - lastX) / dt;
+    lastX = e.clientX; t0 = now;
+
+    /* 只允许左滑：右滑给阻尼 */
+    var raw = mx;
+    var x = raw > 0 ? raw * 0.18 : raw;
+    var w = el.getBoundingClientRect().width || 1;
+    /* 超过卡宽 72% 后加阻尼，手感「拉到头」 */
+    var maxX = -w * 0.72;
+    if(x < maxX) x = maxX + (x - maxX) * 0.18;
+    dx = x;
+    row.style.transform = 'translate3d(' + x.toFixed(2) + 'px,0,0)';
+    var nowArmed = (Math.abs(x) >= w * 0.35);
+    if(nowArmed !== armed){
+      armed = nowArmed;
+      el.classList.toggle('armed', armed);
+    }
+  }
+  function onUp(e){
+    detach();
+    if(!dragging) return;
+    var wasDecided = decided;
+    dragging = false; decided = false;
+    el.classList.remove('dragging');
+    if(!wasDecided) return;
+    var w = el.getBoundingClientRect().width || 1;
+    var THR = w * 0.35;
+    var fling = vx < -0.45;                       /* 快速轻扫：位移小也算删 */
+    el.setAttribute('data-swiped', '1');          /* 标记：别当点按 */
+    if(Math.abs(dx) >= THR || fling) flyOut();
+    else { row.style.transform = ''; el.classList.remove('armed'); armed = false; }
+  }
+
+  /* 弧线飞出：起点=卡片当前位置，终点=左下角，控制点在起点左下 → 路径是弧线而不是直线 */
+  function flyOut(){
+    var r = row.getBoundingClientRect();
+    /* ⚠️ 这些点务必不要叫 S！全局状态对象就叫 S（records/pending/known 都在里面），
+       一旦在这里写 var S = {...} 就会**遮蔽**全局 S，于是 S.records[id] 删的只是
+       一个临时对象上的属性 —— 界面看着滑走了、数据其实一条没删（这个坑排了好几轮）。 */
+    var start = { x:r.left, y:r.top };
+    var end   = { x:-r.width * 0.4, y:window.innerHeight * 0.86 };
+    var ctrl  = { x: Math.min(start.x - 150, end.x + 30), y: start.y + (end.y - start.y) * 0.35 };
+    var p0 = { x:0, y:0 };
+    var p2 = { x:end.x - start.x, y:end.y - start.y };
+    var p1 = { x:ctrl.x - start.x, y:ctrl.y - start.y };
+    /* 数据在动画**开始时**就移除，其余行同时重排填补 */
+    var snapshot = S.records[id];
+    var wasPending = !!S.pending[id];
+    var knownPath = 'data/'+id+'.json';
+    var knownSha = S.known[knownPath] ? S.known[knownPath].sha : null;
+    delete S.records[id]; delete S.pending[id];
+    persist();
+    el.classList.add('gone');
+    if(reduceMotion){
+      finalize();
+      return;
+    }
+    var start = 0;
+    var finished = false;
+    function tick(ts){
+      if(finished) return;
+      if(!start) start = ts;
+      var t = clamp((ts - start)/550, 0, 1);
+      var mt = 1 - t;
+      var x = mt*mt*p0.x + 2*mt*t*p1.x + t*t*p2.x;
+      var y = mt*mt*p0.y + 2*mt*t*p1.y + t*t*p2.y;
+      row.style.transform = 'translate3d(' + x.toFixed(2) + 'px,' + y.toFixed(2) + 'px,0)'
+                          + ' rotate(' + (t * -18).toFixed(2) + 'deg)'
+                          + ' scale(' + (1 - t*0.7).toFixed(4) + ')';
+      el.style.opacity = (1 - t*0.9).toFixed(3);
+      if(t < 1) requestAnimationFrame(tick);
+      else { finished = true; finalize(); }
+    }
+    requestAnimationFrame(tick);
+    /* 兜底：rAF 在某些环境（后台标签、被遮挡的窗口、部分 WebView）不会推进，
+       那样动画永远不结束、撤销也永远不弹 —— 用定时器保底，保证收尾一定发生。 */
+    setTimeout(function(){ if(!finished){ finished = true; finalize(); } }, 900);
+
+    var didFinalize = false;
+    function finalize(){
+      if(didFinalize) return;      /* rAF 与兜底定时器都可能调到这里，只认第一次 */
+      didFinalize = true;
+      /* 走完动画再把时间轴整块重排（其余行自然落位），并弹撤销 */
+      renderListBodyOnly();
+      var undoRec = snapshot, undoPending = wasPending, undoKnownSha = knownSha;
+      toastUndo('已删除「'+(undoRec?undoRec.category:'')+' ¥'+(undoRec?num(undoRec.amount):'')+'」', function(){
+        /* 撤销：数据放回原位（按原路径写回，云端不会重复建文件） */
+        if(undoRec){
+          S.records[undoRec.id] = undoRec;
+          if(undoPending) S.pending[undoRec.id] = true;
+          if(undoKnownSha) S.known['data/'+undoRec.id+'.json'] = { sha:undoKnownSha };
+          /* 撤销时把这条从待删队列里撤掉 */
+          S.delQ = S.delQ.filter(function(x){ return x.path !== 'data/'+undoRec.id+'.json'; });
+          persist(); renderListBodyOnly();
+          toast('已恢复');
+        }
+      }, function(){
+        /* 撤销窗口过了 → 真正排队删云端 */
+        if(knownSha) S.delQ.push({ path:knownPath, sha:knownSha });
+        persist();
+        if(isCfgOk() && navigator.onLine) sync(false);
+      });
+    }
+  }
+}
+/* 底部 toast 带一个「撤销」按钮（过期后关闭窗口） */
+var _undoTimer = null;
+function toastUndo(msg, onUndo, onExpire){
+  var t = $('toast');
+  if(!t){ if(onExpire) setTimeout(onExpire, 5000); return; }
+  t.innerHTML = esc(msg) + ' <b id="undoBtn" style="margin-left:10px;text-decoration:underline;cursor:pointer;">撤销</b>';
+  t.classList.add('show');
+  clearTimeout(t._t);
+  var done = false;
+  function close(){
+    if(done) return; done = true;
+    clearTimeout(_undoTimer);
+    t.classList.remove('show');
+    t.innerHTML = '';
+    t._t = setTimeout(function(){ t.textContent=''; }, 220);
+  }
+  var btn = $('undoBtn');
+  if(btn) btn.onclick = function(){ close(); if(onUndo) onUndo(); };
+  /* 撤销按钮点完要把 toast 收掉，否则它会挂着直到 2.2s 的默认隐藏 */
+  _undoTimer = setTimeout(function(){ close(); if(onExpire) onExpire(); }, 5200);
 }
 /* 时间轴主体：按当前 listYm / listPick 生成 */
 function listBodyHtml(){
@@ -1713,22 +2197,10 @@ function paintCalendar(){
 /* ================= 统计 ================= */
 var statYm = (function(){ var d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1); })();
 var statSeg = 'ov';   // 'ov' 概览 / 'cat' 分类
+var statLiquid = null; // 液态 Tab 指示器句柄（整页重建时换新的）
 function renderStats(){
-  var now = new Date();
+  /* 月份可能被切换过：y/mo 从 statYm 现取（body 里自己会再算一遍明细数据） */
   var y = Number(statYm.slice(0,4)), mo = Number(statYm.slice(5,7));
-  var m = monthMetrics(statYm);
-  var recs = monthRecs(statYm);
-  var daysSet = {};
-  var daySum = {};
-  recs.forEach(function(r){
-    var d = ymdStr(r.ts);
-    daysSet[d] = true;
-    if(r.type!=='income') daySum[d] = (daySum[d]||0) + r.amount;
-  });
-  var dayN = Object.keys(daysSet).length||1;
-  var avg = m.ex/dayN;
-  var maxDay = 0;
-  for(var dk in daySum){ if(daySum[dk] > maxDay) maxDay = daySum[dk]; }
 
   var head = '<div class="pg-head"><div class="row">'
     + '<div><div class="hk">'+y+' 年</div><h1>'+mo+' 月统计</h1></div>'
@@ -1737,11 +2209,73 @@ function renderStats(){
     +   '<button data-mv="1" aria-label="下个月">›</button></div>'
     + '</div></div>';
 
-  var seg = '<div class="seg'+(statSeg==='cat'?' r':'')+'" id="statSeg">'
+  var seg = '<div class="seg" id="statSeg">'
     + '<span class="pill"></span>'
     + '<button data-seg="ov" class="'+(statSeg==='ov'?'on':'')+'">'+ICO.calc+'概览</button>'
     + '<button data-seg="cat" class="'+(statSeg==='cat'?'on':'')+'">'+ICO.tag+'分类</button>'
     + '</div>';
+
+  /* 头部 + 分段控件只建一次：切换「概览/分类」时**只换下面的内容**，
+     否则整页重建会把指示器一起销毁、液态动效根本播不出来。 */
+  $('page-stats').innerHTML = head + seg + '<div id="statBodyWrap"></div>';
+  statLiquid = liquidTab($('statSeg'), '.pill', 'button', statSeg==='cat'?1:0);
+  $('statSeg').querySelectorAll('button').forEach(function(b){
+    b.addEventListener('click', function(){
+      var v = b.getAttribute('data-seg');
+      if(v === statSeg) return;
+      statSeg = v;
+      /* 先让指示器动起来，再换内容（内容重建不影响外壳） */
+      if(statLiquid) statLiquid.set(statSeg==='cat'?1:0);
+      Array.prototype.forEach.call($('statSeg').querySelectorAll('button'), function(x){
+        x.classList.toggle('on', x.getAttribute('data-seg') === statSeg);
+      });
+      renderStatsBody();
+    });
+  });
+  renderStatsBindHead();
+  renderStatsBody();
+}
+
+/* 统计页头部之外的操作（月份切换 / 柱子点击） */
+/* 统计页头部上的操作（月份切换） */
+function renderStatsBindHead(){
+  Array.prototype.forEach.call(document.querySelectorAll('#page-stats [data-mv]'), function(el){
+    el.addEventListener('click', function(){ shiftMonth(Number(el.getAttribute('data-mv'))); });
+  });
+}
+
+/* 只重渲染「概览/分类」下面的内容 */
+function renderStatsBody(){
+  var w = $('statBodyWrap');
+  if(!w) return;
+  w.innerHTML = statsBodyHtml();
+  var mb = $('mBars');
+  if(mb){
+    Array.prototype.forEach.call(mb.querySelectorAll('.bar'), function(el){
+      el.addEventListener('click', function(){ statYm = el.getAttribute('data-ym'); renderStats(); });
+    });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('#statBodyWrap [data-act]'), function(el){
+    el.addEventListener('click', function(){
+      if(el.getAttribute('data-act')==='budget') openBudget();
+    });
+  });
+}
+
+function statsBodyHtml(){
+  var y = Number(statYm.slice(0,4)), mo = Number(statYm.slice(5,7));
+  var m = monthMetrics(statYm);
+  var recs = monthRecs(statYm);
+  var daysSet = {}, daySum = {};
+  recs.forEach(function(r){
+    var dd = ymdStr(r.ts);
+    daysSet[dd] = true;
+    if(r.type!=='income') daySum[dd] = (daySum[dd]||0) + r.amount;
+  });
+  var dayN = Object.keys(daysSet).length||1;
+  var avg = m.ex/dayN;
+  var maxDay = 0;
+  for(var dk in daySum){ if(daySum[dk] > maxDay) maxDay = daySum[dk]; }
 
   var body='';
   if(statSeg==='ov'){
@@ -1872,32 +2406,7 @@ function renderStats(){
       body = sec;
     }
   }
-
-  $('page-stats').innerHTML = head + seg + body;
-  var sg = $('statSeg');
-  if(sg){
-    Array.prototype.forEach.call(sg.querySelectorAll('button'), function(b){
-      b.addEventListener('click', function(){
-        var v = b.getAttribute('data-seg');
-        if(v===statSeg) return;
-        statSeg = v; renderStats();
-      });
-    });
-  }
-  Array.prototype.forEach.call(document.querySelectorAll('#page-stats [data-mv]'), function(el){
-    el.addEventListener('click', function(){ shiftMonth(Number(el.getAttribute('data-mv'))); });
-  });
-  var mb = $('mBars');
-  if(mb){
-    Array.prototype.forEach.call(mb.querySelectorAll('.bar'), function(el){
-      el.addEventListener('click', function(){ statYm = el.getAttribute('data-ym'); renderStats(); });
-    });
-  }
-  Array.prototype.forEach.call(document.querySelectorAll('#page-stats [data-act]'), function(el){
-    el.addEventListener('click', function(){
-      if(el.getAttribute('data-act')==='budget') openBudget();
-    });
-  });
+  return body;
 }
 /* 刻度表盘：顶部弧形刻度，已用部分深色，比例处一个三角指针 */
 function dialSvg(ratio){
@@ -2053,6 +2562,7 @@ function fillFromText(){
 
 /* ================= 记一笔 / 编辑 ================= */
 var editingId=null, curType='expense', curCat='其他', curAcc='微信支付';
+var sheetLiquid = null;   // 「记一笔」里支出/收入的液态 Tab 句柄
 function openSheet(id, presetType){
   editingId = id||null;
   var body = $('sheetBody');
@@ -2136,6 +2646,10 @@ function paintSheetSel(){
     t1.className = curType==='expense'?'on':'';
     t2.className = curType==='income'?'on':'';
     seg.className = 'type-seg' + (curType==='income'?' in':'');
+    /* 支出/收入 也用液态 Tab：两根弹簧驱动左右边缘。
+       弹层每次打开都是新的 DOM，所以句柄要跟着重建。 */
+    if(sheetLiquid) sheetLiquid.dispose();
+    sheetLiquid = liquidTab(seg, '.pill', 'button', curType==='income'?1:0);
   }
 }
 /* 分类选择格里的一格：优先用漫画图标，没有就用 emoji */
