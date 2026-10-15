@@ -1001,7 +1001,7 @@ function spring(el){
    数据形状也保持一致：{ records:{id:rec}, budget, cats, cfg }
    ========================================================================== */
 var LS_KEY = 'xiongji-v1';
-var VERSION = 'v1.4';
+var VERSION = 'v1.5';
 
 var S = { records:{}, budget:0, cats:null, cfg:{ owner:'', repo:'', token:'', auto:false } };
 
@@ -1025,6 +1025,25 @@ function load(){
       r.ts = isNaN(guess) ? Date.now() : guess;
     }
   });
+  /* 存量记录自愈：以前拉下来的记录分类是「其他」、支付方式被快捷指令写死成
+     「支付宝」，但 raw 一直都在。这里用本机分类表重判一次 ——
+     用户在分类管理里新加的关键词，靠这一步才能作用到已经拉下来的账。
+     只补「空/其他」的记录，用户自己改过的分类不碰。 */
+  healRecords();
+}
+function healRecords(){
+  var changed = false;
+  Object.keys(S.records).forEach(function(id){
+    var r = S.records[id];
+    if (!r || !r.raw) return;
+    if (isBadCat(r.category)) {
+      var hit = autoCat(r.raw, r.type) || autoCat(r.note, r.type);
+      if (hit) { r.category = hit; changed = true; }
+    }
+    var acc = guessAccount(r.raw);
+    if (acc && acc !== r.account) { r.account = acc; changed = true; }
+  });
+  if (changed) save();
 }
 function save(){
   try {
@@ -1080,6 +1099,31 @@ function autoCat(text, type){
     });
   });
   return best;
+}
+
+/* 分类好不好用：空 / 不认识 / 「其他」都算没判出来，可以再试一次。
+   注意「其他收入」要放前面先判 —— 否则会被「其他」匹配走。 */
+function isBadCat(name){
+  var c = String(name||'').trim();
+  if (!c) return true;
+  if (c === '其他' || c === '其他收入') return true;
+  var names = cats().map(function(x){ return x.name; });
+  return names.indexOf(c) < 0;
+}
+/* 给一条「从快捷指令来的」记录重判分类：分类是空的或「其他」时才动手，
+   已经判好的（用户改过的）不覆盖。raw 优先，其次 note。 */
+function guessCat(rec){
+  if (!isBadCat(rec.category)) return null;
+  return autoCat(rec.raw, rec.type) || autoCat(rec.note, rec.type) || null;
+}
+/* 从 raw 全文里猜支付方式。快捷指令那边把 account 写死成「支付宝」，
+   但微信账单的原文里会明说「财付通/零钱/微信」，据此纠正。 */
+function guessAccount(raw){
+  var s = String(raw||'');
+  if (/财付通|零钱|微信|收款方备注|转账单号/.test(s)) return '微信支付';
+  if (/支付宝|余额宝|花呗|余利宝/.test(s)) return '支付宝';
+  if (/银行卡|储蓄卡|信用卡/.test(s)) return '银行卡';
+  return '';
 }
 
 /* ==========================================================================
@@ -1886,8 +1930,18 @@ function normalizeCloud(obj, idFromPath){
   if (raw) rec.raw = raw.slice(0, 2000);
   if (!rec.amount && raw) rec.amount = parseRawAmount(raw);
   rec.ts = tsFromTime(rec.time) || Date.now();
+
   var names = cats().map(function(c){ return c.name; });
   if (names.indexOf(rec.category) < 0) rec.category = rec.type === 'income' ? '其他收入' : '其他';
+
+  /* 快捷指令只写死「其他 / 支付宝」，中文店名和支付方式都在 raw 里。
+     所以这里拿本机分类表的关键词再判一次 —— 用户在分类管理里加的
+     「早龙食品」这类词，就是靠这一步才生效的。 */
+  var hit = guessCat(rec);
+  if (hit) rec.category = hit;
+  var acc = guessAccount(raw);
+  if (acc) rec.account = acc;
+
   return rec;
 }
 

@@ -694,7 +694,7 @@
 
 /* ================= 常量 ================= */
 var KEY = 'lazy-ledger-v1';
-var VER = 'v4.0.2';
+var VER = 'v4.0.3';
 
 var DEFAULT_CATS = [
   { id:'canyin',  name:'餐饮', emoji:'🍜', color:'#FF7B7B', type:'expense', kw:['饭','餐','吃','喝','午饭','早饭','晚饭','夜宵','外卖','美团','饿了么','食堂','咖啡','奶茶','星巴克','肯德基','麦当劳','汉堡','火锅','烧烤','小吃','米线','麻辣烫','拉面','面馆','牛肉面','盖饭','沙县','黄焖鸡','甜品','蛋糕','豆浆','粥','点心','快餐','简餐','酒馆','水果','买菜'] },
@@ -1170,6 +1170,16 @@ function guessCat(rec){
   if(cur && !isBadCat(cur) && cur!=='其他' && cur!=='其他收入') return null;
   return autoCat(rec.raw, rec.type) || autoCat(rec.note, rec.type) || null;
 }
+/* 从 raw 全文里猜支付方式。快捷指令那边把 account 写死成「支付宝」，
+   但微信账单的原文里会明说「财付通/零钱/微信」，据此纠正。
+   主 App 和熊记共用同一套判断（两边的快捷指令是同一个）。 */
+function guessAccount(raw){
+  var s = String(raw||'');
+  if(/财付通|零钱|微信|收款方备注|转账单号/.test(s)) return '微信支付';
+  if(/支付宝|余额宝|花呗|余利宝/.test(s)) return '支付宝';
+  if(/银行卡|储蓄卡|信用卡/.test(s)) return '银行卡';
+  return '';
+}
 /* 从 OCR 全文里补出金额（云端记录 amount 为空时的兜底）。
    按优先级依次尝试，第一个命中的就是结果。**顺序很重要，别随便调。**
      ① 带符号的两位小数    -28.80 / +150.00   （最可靠）
@@ -1280,11 +1290,19 @@ function normalizeRec(r, idFromPath){
   rec.ts = parseTs(rec.time);
   if(rec.ts && String(r.time||'').indexOf('_')>=0) rec.time = ymdStr(rec.ts)+' '+hmStr(rec.ts);
   rec.auto = false;
+  var rawAcc = rec.account;
   if(rec.src==='shortcut'){
     var hit = guessCat(rec);
     if(hit){ rec.category=hit; rec.auto=true; }
+    /* 快捷指令把 account 写死成支付宝，但微信账单原文里有「财付通/零钱」，
+       据此纠正。只在明显是微信时才改，其余保持用户填的。 */
+    var acc = guessAccount(rec.raw);
+    if(acc) rec.account = acc;
   }
-  rec.fixed = (rec.category!==rawCat) || (rec.amount!==rawAmt);
+  /* fixed = 这条记录被 App 改过（分类或金额或支付方式），要回推云端。
+     ⚠️ account 也要算进去 —— 只在块里写 rec.fixed=true 的话，
+     下一行会把它整个覆盖掉，纠正过的支付方式就永远推不回去。 */
+  rec.fixed = (rec.category!==rawCat) || (rec.amount!==rawAmt) || (rec.account!==rawAcc);
   return rec;
 }
 function cloudRec(rec){
