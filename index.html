@@ -694,7 +694,7 @@
 
 /* ================= 常量 ================= */
 var KEY = 'lazy-ledger-v1';
-var VER = 'v4.0.4';
+var VER = 'v4.0.5';
 
 var DEFAULT_CATS = [
   { id:'canyin',  name:'餐饮', emoji:'🍜', color:'#FF7B7B', type:'expense', kw:['饭','餐','吃','喝','午饭','早饭','晚饭','夜宵','外卖','美团','饿了么','食堂','咖啡','奶茶','星巴克','肯德基','麦当劳','汉堡','火锅','烧烤','小吃','米线','麻辣烫','拉面','面馆','牛肉面','盖饭','沙县','黄焖鸡','甜品','蛋糕','豆浆','粥','点心','快餐','简餐','酒馆','水果','买菜'] },
@@ -985,6 +985,7 @@ function openSheetMorph(srcEl){
 /* ================= 状态 ================= */
 var S = {
   records:{}, known:{}, pending:{}, delQ:[],
+  errs:{},
   cfg:{ owner:'', repo:'lazy-ledger-data', token:'', auto:true, branch:'main' },
   lastSync:0,
   budget:0,
@@ -1000,6 +1001,7 @@ function migrate(raw){
     known:(o.known && typeof o.known==='object') ? o.known : {},
     pending:(o.pending && typeof o.pending==='object') ? o.pending : {},
     delQ:Array.isArray(o.delQ) ? o.delQ : [],
+    errs:(o.errs && typeof o.errs==='object') ? o.errs : {},
     cfg:{
       owner:String((o.cfg&&o.cfg.owner)||''),
       repo:String((o.cfg&&o.cfg.repo)||'lazy-ledger-data'),
@@ -1339,59 +1341,116 @@ function cloudRec(rec){
 
 /* ================= 同步（GitHub 私有仓库当数据库） ================= */
 var syncing=false;
+/* 上一次失败的原因。UI 直接读它，用户不用翻控制台就知道为什么传不上去。 */
+var lastSyncErr=null;
 function ghHeaders(extra){
   var h = { 'Accept':'application/vnd.github+json', 'X-GitHub-Api-Version':'2022-11-28' };
   if(S.cfg.token) h['Authorization']='Bearer '+S.cfg.token;
   if(extra) for(var k in extra) h[k]=extra[k];
   return h;
 }
+/* 只重试「还有机会成功」的失败：断网 / 超时 / 5xx / 429。
+   401、403、404、422 重试多少次都一样，直接抛给上层。 */
+function isRetryable(e){
+  if(!e) return false;
+  if(e.offline) return true;
+  if(!e.status) return true;                       /* fetch 本身失败（DNS/断连） */
+  if(e.status===429) return true;
+  return e.status>=500;
+}
 function ghApi(path, opt){
   opt = opt||{};
   opt.headers = ghHeaders(opt.headers);
-  return fetch('https://api.github.com'+path, opt).then(function(res){
-    return res.text().then(function(txt){
-      var body=null;
-      try{ body = txt?JSON.parse(txt):null; }catch(e){}
-      if(!res.ok){
-        var msg = (body&&body.message)?body.message:('HTTP '+res.status);
-        var err = new Error(msg); err.status=res.status; throw err;
+  var url = 'https://api.github.com'+path;
+  function once(n){
+    return fetch(url, opt).then(function(res){
+      return res.text().then(function(txt){
+        var body=null;
+        try{ body = txt?JSON.parse(txt):null; }catch(e){}
+        if(!res.ok){
+          var msg = (body&&body.message)?body.message:('HTTP '+res.status);
+          var err = new Error(msg); err.status=res.status;
+          if(body&&body.errors) err.errors=body.errors;
+          if(res.status===403 && res.headers && res.headers.get && res.headers.get('x-ratelimit-remaining')==='0') err.rateLimit=true;
+          throw err;
+        }
+        return body;
+      });
+    }, function(){
+      /* fetch 直接 reject（离线、DNS、连接被重置）。标一个离线标记，方便上层区分。 */
+      var err = new Error('network');
+      err.offline = !navigator.onLine;
+      err.network = true;
+      throw err;
+    }).catch(function(e){
+      if(n>1 && isRetryable(e)){
+        var wait = e.status===429 ? 4000 : (e.network||e.offline ? 900 : 700);
+        return new Promise(function(r){ setTimeout(r, wait); }).then(function(){ return once(n-1); });
       }
-      return body;
+      throw e;
     });
-  });
+  }
+  return once(3);
 }
 function isCfgOk(){ return !!(S.cfg.owner && S.cfg.repo && S.cfg.token); }
+/* 仓库当前的 blob sha。S.known 可能过期（别的设备改过、云端被手动删改），
+   所以冲突时以这份实时值兜底。404 表示云端还没有这个文件。 */
+function cloudSha(path){
+  return ghApi('/repos/'+S.cfg.owner+'/'+S.cfg.repo+'/contents/'+path).then(function(f){
+    return (f && f.sha) ? f.sha : null;
+  }).catch(function(e){
+    if(e && e.status===404) return null;
+    throw e;
+  });
+}
+/* 写一个文件到云端。sha 由调用方保证是「最新」的：
+   先用 S.known 里缓存的值，冲突（409/422）再拿实时 sha 重试一次。
+   GitHub 对「文件已存在但没给 sha」和「sha 过期」都返回 409/422，
+   老代码只处理了「422 且本地没记过 sha」，一旦 S.known 里留下过期的旧 sha
+   就永远 422 —— 这正是「能配置、新记录传不上去」的直接原因。 */
+function putFile(path, body){
+  return ghApi('/repos/'+S.cfg.owner+'/'+S.cfg.repo+'/contents/'+path, {
+    method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+  }).catch(function(e){
+    var conflict = (e && (e.status===409 || e.status===422));
+    if(!conflict) throw e;
+    return cloudSha(path).then(function(sha){
+      if(!sha){ throw e; }                        /* 云端没有这文件，422 是别的原因（真·格式错） */
+      if(body.sha===sha){ throw e; }              /* 已经是这个 sha，重试没意义 */
+      body.sha = sha;
+      return ghApi('/repos/'+S.cfg.owner+'/'+S.cfg.repo+'/contents/'+path, {
+        method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+      });
+    });
+  }).then(function(r){
+    if(r && r.content && r.content.sha){ S.known[path]={sha:r.content.sha}; persist(); }
+    return r;
+  });
+}
+/* 单条上传。失败只影响自己（记进 S.errs），不拖垮整条队列 ——
+   老代码一条抛错后面的记录全都不再尝试，看起来就是「新记录一条都传不上去」。 */
+function pushOne(id){
+  var rec = S.records[id];
+  if(!rec){ delete S.pending[id]; return Promise.resolve(); }
+  var path = 'data/'+id+'.json';
+  var body = { message:'ledger: '+(rec.time||ymdStr(Date.now())), content:b64(JSON.stringify(cloudRec(rec))) };
+  if(S.known[path] && S.known[path].sha) body.sha = S.known[path].sha;
+  return putFile(path, body).then(function(){
+    delete S.pending[id]; delete (S.errs||{})[id]; persist();
+  }).catch(function(e){
+    S.errs = S.errs || {};
+    S.errs[id] = syncErrText(e);
+    persist();
+    throw e;
+  });
+}
 function pushPending(){
   var ids = Object.keys(S.pending);
+  var firstErr = null;
   var chain = Promise.resolve();
   ids.forEach(function(id){
     chain = chain.then(function(){
-      var rec = S.records[id];
-      if(!rec){ delete S.pending[id]; return Promise.resolve(); }
-      var path = 'data/'+id+'.json';
-      var body = { message:'ledger: '+(rec.time||ymdStr(Date.now())), content:b64(JSON.stringify(cloudRec(rec))) };
-      if(S.known[path]) body.sha = S.known[path].sha;
-      return ghApi('/repos/'+S.cfg.owner+'/'+S.cfg.repo+'/contents/'+path, {
-        method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
-      }).then(function(r){
-        if(r&&r.content&&r.content.sha) S.known[path]={sha:r.content.sha};
-        delete S.pending[id]; persist();
-      }).catch(function(e){
-        if(e.status===422 && !S.known[path]){
-          return ghApi('/repos/'+S.cfg.owner+'/'+S.cfg.repo+'/contents/'+path).then(function(f){
-            if(f&&f.sha){
-              body.sha=f.sha;
-              return ghApi('/repos/'+S.cfg.owner+'/'+S.cfg.repo+'/contents/'+path, {
-                method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
-              }).then(function(r2){
-                if(r2&&r2.content&&r2.content.sha) S.known[path]={sha:r2.content.sha};
-                delete S.pending[id]; persist();
-              });
-            }
-          });
-        }
-        throw e;
-      });
+      return pushOne(id).catch(function(e){ if(!firstErr) firstErr = e; });
     });
   });
   chain = chain.then(function(){
@@ -1405,16 +1464,23 @@ function pushPending(){
           S.delQ = S.delQ.filter(function(x){ return x.path!==d.path; });
           persist();
         }).catch(function(e){
-          if(e.status===404){
+          if(e.status===404 || e.status===409){
+            /* 404 = 云端已没有；409 = sha 过期（云端内容变了）。都不该卡住删除队列。 */
             delete S.known[d.path];
             S.delQ = S.delQ.filter(function(x){ return x.path!==d.path; });
             persist();
+            return;
           }
+          throw e;
         });
       });
-    }, Promise.resolve());
+    }, Promise.resolve()).catch(function(e){
+      if(!firstErr) firstErr = e;
+    });
   });
-  return chain;
+  return chain.then(function(){
+    if(firstErr) throw firstErr;
+  });
 }
 function pull(){
   return ghApi('/repos/'+S.cfg.owner+'/'+S.cfg.repo).then(function(repo){
@@ -1422,9 +1488,15 @@ function pull(){
     if(br!==S.cfg.branch){ S.cfg.branch=br; persist(); }
     return ghApi('/repos/'+S.cfg.owner+'/'+S.cfg.repo+'/git/trees/'+encodeURIComponent(br)+'?recursive=1');
   }).then(function(tree){
+    if(tree && tree.truncated){
+      /* 记录超过约 10 万条时 GitHub 会截断。提醒一句，别让它静默丢数据。 */
+      console.warn('lazy-ledger: tree truncated, some records may be missing from this pull');
+    }
     var files = ((tree&&tree.tree)||[]).filter(function(t){
       return t.type==='blob' && /^data\/rec-.*\.json$/.test(t.path);
     });
+    /* 还没拉过的（含以前拉失败被静默吞掉的）都算 fresh。
+       老代码把失败 catch 成空，等于这条记录永远不再重试。 */
     var fresh = files.filter(function(f){ return !S.known[f.path]; }).slice(0,300);
     return fresh.reduce(function(c,f){
       return c.then(function(){
@@ -1437,7 +1509,8 @@ function pull(){
             catch(e){ try{ txt = atob(j.content.replace(/\s/g,'')); }catch(e2){ txt=null; } }
           } else if(j && typeof j==='object' && (j.id||j.type||j.amount!=null)){
             var rec0 = normalizeRec(j, idFromPath);
-            S.records[rec0.id]=rec0;
+            /* 本地还没传上去的更新不能被云端旧版覆盖（否则手机上刚改的分类会「跳回去」）。 */
+            if(!S.pending[rec0.id]) S.records[rec0.id]=rec0;
             S.known[f.path]={sha:j.sha||f.sha};
             if(rec0.fixed) S.pending[rec0.id]=true;
             persist();
@@ -1447,43 +1520,83 @@ function pull(){
           var p = looseJson(txt);
           if(!p.ok) throw new Error('bad json');
           var rec = normalizeRec(p.obj, idFromPath);
-          S.records[rec.id]=rec;
+          if(!S.pending[rec.id]) S.records[rec.id]=rec;
           S.known[f.path]={sha:(j&&j.sha)||f.sha};
           if(rec.fixed || p.repaired) S.pending[rec.id]=true;
           persist();
-        }).catch(function(){});
+        }).catch(function(e){
+          /* 单条拉取失败要记下来告诉用户，但也不能中断其余记录的拉取。 */
+          S.pullErr = syncErrText(e);
+          persist();
+        });
       });
     }, Promise.resolve());
   });
 }
 function sync(manual){
-  if(syncing) return;
-  if(!S.cfg.owner || !S.cfg.repo){ if(manual) toast('请先配置 GitHub 同步'); return; }
-  if(!navigator.onLine){ if(manual) toast('当前离线'); return; }
+  if(syncing){
+    if(manual) toast('正在同步，请稍候…');
+    return Promise.resolve();
+  }
+  if(!S.cfg.owner || !S.cfg.repo){ if(manual) toast('请先配置 GitHub 同步'); return Promise.resolve(); }
+  if(!navigator.onLine){ if(manual) toast('当前离线'); return Promise.resolve(); }
   syncing = true;
   if(manual) toast('同步中…');
-  var hadErr=null;
-  var pre = isCfgOk()?pushPending():Promise.resolve();
-  pre.then(function(){ return pull(); })
-    .then(function(){ return isCfgOk()?pushPending():Promise.resolve(); })
-    .then(function(){ S.lastSync=Date.now(); persist(); })
-    .catch(function(e){ hadErr=e; if(e&&e.status===401) S.lastSync=0; })
+  var pushErr=null, pullFail=null;
+  S.pullErr = null;
+  /* 推送和拉取必须互相独立：老代码是一条链，推送 throw 后 pull() 根本不会执行，
+     结果只要有一条记录传不上去，就再也拉不到云端的新记录（另一个方向也一起坏掉）。
+     现在各自 catch，任何一边失败都不影响另一边。 */
+  var pre = isCfgOk()
+    ? pushPending().catch(function(e){ pushErr = e; })
+    : Promise.resolve();
+  return pre
+    .then(function(){ return pull(); })
+    .catch(function(e){ pullFail = e; })
+    .then(function(){
+      /* 只有两边都干净才算「已同步」；否则保留错误，状态栏照实显示。 */
+      var dirty = Object.keys(S.errs||{}).length > 0 || Object.keys(S.pending).length > 0;
+      if(!pullFail && !dirty){ S.lastSync=Date.now(); lastSyncErr=null; }
+      else { lastSyncErr = pullFail || pushErr; }
+      if(pullFail && pullFail.status===401) S.lastSync=0;
+      persist();
+    })
     .then(function(){
       syncing=false;
       renderAll();
       if(manual){
-        if(hadErr) toast('同步失败：'+syncErrText(hadErr));
+        var hard = pullFail || pushErr;
+        if(hard) toast('同步失败：'+syncErrText(hard));
+        else if(Object.keys(S.pending).length) toast('还有 '+Object.keys(S.pending).length+' 条没传上去');
         else toast('同步完成 ✔');
       }
     });
 }
 function syncErrText(e){
   if(!e) return '未知错误';
+  if(e.network) return '网络连不上 GitHub（检查网络/梯子后重试）';
   if(e.status===401) return 'Token 无效或已过期（去 GitHub 重新生成）';
-  if(e.status===403) return '权限不足（检查 Token 的 Contents 读写权限）';
+  if(e.status===403) return e.rateLimit ? 'GitHub 限流，稍等几分钟' : '权限不足（检查 Token 的 Contents 读写权限）';
   if(e.status===404) return '仓库不存在，或 Token 没有授权这个仓库';
+  if(e.status===409) return '云端文件冲突（会自动重试，持续失败请检查仓库）';
   if(e.status===422) return '数据格式问题（Base64 或 JSON 不合法）';
   return e.message || '网络问题，稍后重试';
+}
+/* 真正验证「能不能写」：App 老版本只 GET 一下仓库就报「连接成功」，
+   于是 token 只有读权限时也显示配置成功，随后每条记录都传不上去。
+   这里做一次幂等的小写入（.keep），能写才算配置 OK。 */
+function testWrite(){
+  var path = '.lazy-ledger-ok';
+  var body = { message:'ledger: write test', content:b64('ok '+new Date().toISOString()) };
+  return putFile(path, body).then(function(){
+    return true;
+  }).catch(function(e){
+    /* 403 = token 没有 Contents 写权限；422 = 内容没变，说明写得进去。
+       这两种都算「已探明」，返回布尔值；其余（401/404/网络）继续抛给上层显示。 */
+    if(e && e.status===403) return false;
+    if(e && e.status===422) return true;
+    throw e;
+  });
 }
 
 /* ================= 图标（线性 SVG，与参考图一致） ================= */
@@ -1548,7 +1661,10 @@ function catCircle(name, size){
 }
 function txRow(r){
   var isIn = r.type==='income';
-  var pend = S.pending[r.id] ? '<span class="st" style="background:var(--accent);" title="待上传"></span>' : '';
+  /* 红点 = 这条传不上去（有具体错误）；橙点 = 还没轮到上传。 */
+  var pend = (S.errs && S.errs[r.id])
+    ? '<span class="st" style="background:var(--red);" title="上传失败：'+esc(S.errs[r.id])+'"></span>'
+    : (S.pending[r.id] ? '<span class="st" style="background:var(--accent);" title="待上传"></span>' : '');
   return '<div class="tx" data-id="'+esc(r.id)+'">'
     + catCircle(r.category)
     + '<div class="mid">'
@@ -2502,7 +2618,10 @@ function renderMe(){
   var now = new Date();
   var ym = now.getFullYear()+'-'+pad(now.getMonth()+1);
   var m = monthMetrics(ym);
-  var syncTxt = isCfgOk() ? (S.lastSync?('已同步 '+hmStr(S.lastSync)):'已配置') : '未配置';
+  var errN = Object.keys(S.errs||{}).length;
+  var syncTxt = isCfgOk()
+    ? (errN ? ('上传失败 '+errN+' 条') : (S.pending && Object.keys(S.pending).length ? ('待上传 '+Object.keys(S.pending).length+' 条') : (S.lastSync?('已同步 '+hmStr(S.lastSync)):'已配置')))
+    : '未配置';
   var bud = Number(S.budget)||0;
 
   var hero = '<div class="card me-hero">'
@@ -2799,6 +2918,7 @@ function delRecordById(id, fromSheet){
     var path = 'data/'+id+'.json';
     if(S.known[path]) S.delQ.push({ path:path, sha:S.known[path].sha });
     delete S.records[id]; delete S.pending[id];
+    if(S.errs) delete S.errs[id];   /* 记录没了，它的错误标记也得清掉，否则「上传失败 N 条」永远不降 */
     persist();
     if(fromSheet) closeSheet();
     renderAll();
@@ -2848,12 +2968,19 @@ function openNotify(){
   var pendN = Object.keys(S.pending).length;
   var n = Object.keys(S.records).length;
   $('sheetTitle').textContent = '提醒';
+  var errN2 = Object.keys(S.errs||{}).length;
+  var why = '';
+  if(errN2){ for(var eid in S.errs){ why = S.errs[eid]; break; } }
+  else if(lastSyncErr) why = syncErrText(lastSyncErr);
   $('sheetBody').innerHTML = ''
     + '<div class="card" style="padding:18px;margin-bottom:12px;">'
     +   '<div class="k">同步状态</div>'
     +   '<div style="font-size:16px;font-weight:800;margin-top:5px;">'
-    +     (isCfgOk() ? (pendN?('有 '+pendN+' 笔还没传上去'):'全部已同步') : '还没配置云端同步')
+    +     (isCfgOk()
+            ? (errN2 ? ('有 '+errN2+' 笔传不上去') : (pendN?('有 '+pendN+' 笔还没传上去'):'全部已同步'))
+            : '还没配置云端同步')
     +   '</div>'
+    +   (why ? '<div class="tiny" style="margin-top:6px;color:var(--red);">'+esc(why)+'</div>' : '')
     +   '<div class="tiny muted" style="margin-top:6px;">'+(isCfgOk()
           ? ('仓库 '+esc(S.cfg.owner+'/'+S.cfg.repo)+(S.lastSync?(' · 上次 '+hmStr(S.lastSync)):''))
           : '数据目前只在本机，换手机/清缓存会丢。')+'</div>'
@@ -3133,6 +3260,14 @@ function openRecurring(){
 function openSync(){
   $('sheetTitle').textContent = 'GitHub 同步';
   var body = $('sheetBody');
+  var pendN = Object.keys(S.pending).length;
+  var errN = Object.keys(S.errs||{}).length;
+  var worst = '';
+  if(errN){
+    for(var eid in S.errs){ worst = S.errs[eid]; break; }
+  }else if(lastSyncErr){
+    worst = syncErrText(lastSyncErr);
+  }
   body.innerHTML = ''
     + '<div class="sync-hero">'
     +   '<img src="./stickers/manga-wide-01.jpg" alt="">'
@@ -3155,7 +3290,9 @@ function openSync(){
     +   '</div></div>'
     + '<div class="card" style="padding:16px;font-size:13px;font-weight:600;color:var(--ink2);line-height:1.8;">'
     +   '状态：'+esc(isCfgOk() ? (S.lastSync?('已同步 '+new Date(S.lastSync).toLocaleString('zh-CN')):'已配置') : '未配置')+'<br>'
-    +   '待上传：'+Object.keys(S.pending).length+' 条'
+    +   '待上传：'+pendN+' 条'
+    +   (errN ? ('<br><span style="color:var(--red);">上传失败：'+errN+' 条 · '+esc(worst)+'</span>') : '')
+    +   (!errN && worst ? ('<br><span style="color:var(--red);">上次失败：'+esc(worst)+'</span>') : '')
     + '</div>';
   openSheetMorph();
   $('sheetX').onclick = closeSheet;
@@ -3170,13 +3307,23 @@ function openSync(){
     var t = String($('cfgToken').value||'').trim();
     if(!o || !r){ toast('用户名和仓库名都要填'); return; }
     S.cfg.owner=o; S.cfg.repo=r; S.cfg.token=t;
+    /* 换了仓库/账号，本地缓存的 sha 全部失效，否则第一次上传会拿旧 sha 撞 409。 */
+    S.known = {}; S.errs = {}; S.lastSync = 0;
     persist();
     if(!t){ toast('已保存（没填 token，只能读公开仓库）'); closeSheet(); renderAll(); return; }
-    toast('正在测试…');
+    toast('正在测试读写…');
+    /* 先读仓库（校验用户名/仓库名/授权），再做一次真实写入（校验 Contents 写权限）。
+       只做 GET 的话，只有读权限的 token 也会显示「连接成功」。 */
     ghApi('/repos/'+o+'/'+r).then(function(info){
       S.cfg.branch = (info&&info.default_branch)||'main';
-      S.lastSync = 0; persist();
-      toast('连接成功 ✔');
+      persist();
+      return testWrite();
+    }).then(function(canWrite){
+      if(!canWrite){
+        toast('能读不能写：Token 缺 Contents 读写权限');
+        return;
+      }
+      toast('连接成功 ✔ 可以上传');
       closeSheet(); renderAll(); sync(false);
     }).catch(function(e){
       toast('连接失败：'+syncErrText(e));
